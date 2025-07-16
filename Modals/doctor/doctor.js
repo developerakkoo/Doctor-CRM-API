@@ -1,21 +1,88 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
 
 // Schema Definition
 const doctorSchema = new mongoose.Schema({
-    name: {
-        type: String,
-        required: true
+  name: {
+    type: String,
+    required: true
+  },
+  specialty: {
+    type: String,
+    required: true
+  },
+  yearsOfExperience: {
+    type: Number,
+    required: true
+  },
+  password: {
+    type: String,
+    required: true,
+    select: false // Exclude by default, fetch manually when needed
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  otpSecret: {
+    type: String
+  },
+  phone: String,
+  address: String,
+  dob: Date,
+  age: Number,
+  profile: {
+    type: String,
+    default: ''
+  },
+  role: {
+    type: String,
+    enum: ['admin', 'doctor', 'owner'],
+    default: 'doctor',
+    required: true
+  },
+  degreePhoto: {
+    data: Buffer,
+    contentType: String
+  },
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      required: true
     },
-    specialty: {
-        type: String,
-        required: true
+    coordinates: {
+      type: [Number], // [longitude, latitude]
+      required: true
     },
-    yearsOfExperience: {
-        type: Number,
-        required: true
+    locationName: {
+      type: String,
+      required: true
     }
+  },
+  resetPasswordToken: {
+    type: String
+  },
+  resetPasswordExpires: {
+    type: Date
+  }
 });
 
-const Doctor = mongoose.model('Doctor', doctorSchema);
+// ✅ Pre-save hook to hash password if modified
+doctorSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
 
-module.exports = Doctor;
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+
+  // Optional debug
+  // console.log('Password hashed before save');
+  next();
+});
+
+// Geospatial index
+doctorSchema.index({ location: '2dsphere' });
+
+const Doctor = mongoose.model('Doctor', doctorSchema);
+export default Doctor;

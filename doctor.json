@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "total": 120,
+  "page": 2,
+  "pages": 24,
+  "data": [
+    {
+      "_id": "60f6f0a03b9e4a0015e6b77c",
+      "name": "Dr. Arun Mehta",
+      "email": "arun@example.com",
+      "phone": "9876543210",
+      "specialty": "Dermatologist",
+      "location": "Mumbai",
+      "yearsOfExperience": 8
+    }
+    
+  ]
+}
