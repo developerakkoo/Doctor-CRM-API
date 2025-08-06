@@ -1,7 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-
 const reportSchema = new mongoose.Schema({
   title: String,
   date: Date,
@@ -52,6 +51,15 @@ const billSchema = new mongoose.Schema({
   }
 }, { _id: false }); // _id is defined manually above
 
+const videoSchema = new mongoose.Schema({
+  title: String,
+  fileUrl: String,
+  context: { type: String, enum: ['prescription', 'bill', 'report', 'other'], default: 'other' },
+  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor' },
+  uploadedAt: { type: Date, default: Date.now }
+}, { _id: true });
+
+
 const patientSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -82,8 +90,10 @@ const patientSchema = new mongoose.Schema({
   reports: [reportSchema],
   prescriptions: [prescriptionSchema],
   bills: [billSchema],
+  videos: [videoSchema],
   createdAt: { type: Date, default: Date.now }
 });
+
 
 
 

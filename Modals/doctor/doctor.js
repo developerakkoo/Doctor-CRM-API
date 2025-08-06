@@ -61,12 +61,29 @@ const doctorSchema = new mongoose.Schema({
       required: true
     }
   },
+  videos: [
+  {
+    title: String,
+    videoUrl: String,
+    context: {
+      type: String,
+      enum: ['prescription', 'bill', 'report'],
+      required: true
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now
+    }
+    }
+  ],
   resetPasswordToken: {
     type: String
   },
   resetPasswordExpires: {
     type: Date
   }
+  
+
 });
 
 // ✅ Pre-save hook to hash password if modified

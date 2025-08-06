@@ -19,6 +19,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
 import sendEmail from '../../utils/sendEmail.js';
+import Counter from '../../Modals/patient/counter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -284,8 +285,7 @@ export const loginDoctor = async (req, res) => {
 
         const token = jwt.sign(
             {
-                doctorId: doctor._id,
-                role: 'doctor'
+                doctorId: doctor._id, role: doctor.role
             },
             process.env.JWT_ACCESS_SECRET,
             { expiresIn: '1d' }
@@ -300,60 +300,60 @@ export const loginDoctor = async (req, res) => {
 };
 
 export const changePassword = async (req, res) => {
-  const doctorId = req.user?.doctorId;
-  const { currentPassword } = req.body;
+    const doctorId = req.user?.doctorId;
+    const { currentPassword } = req.body;
 
-  try {
-    const doctor = await Doctor.findById(doctorId).select('+password email name');
-    if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
+    try {
+        const doctor = await Doctor.findById(doctorId).select('+password email name');
+        if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
 
-    const isMatch = await bcrypt.compare(currentPassword.trim(), doctor.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Current password is incorrect' });
+        const isMatch = await bcrypt.compare(currentPassword.trim(), doctor.password);
+        if (!isMatch) {
+            return res.status(401).json({ message: 'Current password is incorrect' });
+        }
+
+        // ✅ Generate a one-time password change token (expires in 15 mins)
+        const token = jwt.sign(
+            { doctorId: doctor._id, email: doctor.email },
+            JWT_SECRET,
+            { expiresIn: '15m' }
+        );
+
+        const link = `http://localhost:5173/reset-password?token=${token}`;
+
+        await sendEmail({
+            to: doctor.email,
+            subject: 'Change Your Password - Doctor CRM',
+            text: `Hi Dr. ${doctor.name},\n\nClick the link below to set your new password:\n\n${link}\n\nNote: This link is valid for 15 minutes.\n\n– Doctor CRM`
+        });
+
+        res.status(200).json({ message: 'Password reset link sent to your email.' });
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ message: 'Failed to initiate password change', error: error.message });
     }
-
-    // ✅ Generate a one-time password change token (expires in 15 mins)
-    const token = jwt.sign(
-      { doctorId: doctor._id, email: doctor.email },
-      JWT_SECRET,
-      { expiresIn: '15m' }
-    );
-
-    const link = `http://localhost:5173/reset-password?token=${token}`;
-
-    await sendEmail({
-      to: doctor.email,
-      subject: 'Change Your Password - Doctor CRM',
-      text: `Hi Dr. ${doctor.name},\n\nClick the link below to set your new password:\n\n${link}\n\nNote: This link is valid for 15 minutes.\n\n– Doctor CRM`
-    });
-
-    res.status(200).json({ message: 'Password reset link sent to your email.' });
-  } catch (error) {
-    console.error('Change password error:', error);
-    res.status(500).json({ message: 'Failed to initiate password change', error: error.message });
-  }
 };
 
 export const confirmChangePassword = async (req, res) => {
-  const { token } = req.query;
-  const { newPassword } = req.body;
+    const { token } = req.query;
+    const { newPassword } = req.body;
 
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const doctor = await Doctor.findById(decoded.doctorId).select('+password');
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const doctor = await Doctor.findById(decoded.doctorId).select('+password');
 
-    if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
+        if (!doctor) {
+            return res.status(404).json({ message: 'Doctor not found' });
+        }
+
+        doctor.set('password', newPassword.trim());
+        await doctor.save();
+
+        res.status(200).json({ message: 'Password changed successfully' });
+    } catch (error) {
+        console.error('Password confirm error:', error);
+        res.status(400).json({ message: 'Invalid or expired token' });
     }
-
-    doctor.set('password', newPassword.trim());
-    await doctor.save();
-
-    res.status(200).json({ message: 'Password changed successfully' });
-  } catch (error) {
-    console.error('Password confirm error:', error);
-    res.status(400).json({ message: 'Invalid or expired token' });
-  }
 };
 
 
@@ -377,10 +377,15 @@ export const requestPasswordReset = async (req, res) => {
 
         // Construct reset link
 
-        const resetLink = `http://localhost:5173/reset-password?token=${token}`;
+        const resetLink = `http://localhost:5173/reset-password?token=${resetToken}`;
 
         // Send email (dummy function or actual SMTP)
-        await sendEmail(doctor.email, 'Password Reset', `Reset your password here: ${resetLink}`);
+        await sendEmail({
+            to: doctor.email,
+            subject: 'Password Reset',
+            text: `Reset your password here: ${resetLink}`,
+        });
+
 
         res.status(200).json({ message: 'Password reset link sent to email' });
 
@@ -394,25 +399,38 @@ export const requestPasswordReset = async (req, res) => {
 
 export const getDoctorById = async (req, res) => {
     const { id } = req.params;
+    console.log("Received request to get doctor by ID:", id);
 
     try {
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ message: 'Invalid doctor ID format' });
+            console.warn("Invalid doctor ID format");
+            return res.status(400).json({
+                success: false,
+                message: "Invalid doctor ID format",
+            });
         }
 
-        const doctor = await Doctor.findById(id);
+        const doctor = await Doctor.findById(id).select("-password");
         if (!doctor) {
-            return res.status(404).json({ message: 'Doctor not found' });
+            console.warn("Doctor not found with ID:", id);
+            return res.status(404).json({
+                success: false,
+                message: "Doctor not found",
+            });
         }
 
         res.status(200).json({
             success: true,
-            message: 'Doctor retrieved successfully',
-            data: doctor
+            message: "Doctor retrieved successfully",
+            data: doctor,
         });
     } catch (error) {
-        console.error('Error fetching doctor by ID:', error);
-        res.status(500).json({ message: 'Error fetching doctor', error: error.message });
+        console.error("Error fetching doctor by ID:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error while fetching doctor",
+            error: error.message,
+        });
     }
 };
 
@@ -565,23 +583,145 @@ export const getPatientCounts = async (req, res) => {
 };
 
 export const resetPassword = async (req, res) => {
-  const { token, newPassword } = req.body;
+    const { token, newPassword } = req.body;
 
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET); // or JWT_SECRET
-    const doctor = await Doctor.findById(decoded.doctorId).select('+password');
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET); // or JWT_SECRET
+        const doctor = await Doctor.findById(decoded.doctorId).select('+password');
 
-    if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
+        if (!doctor) {
+            return res.status(404).json({ message: 'Doctor not found' });
+        }
+
+        doctor.password = newPassword.trim();  // ✅ Let pre-save hook hash it
+        await doctor.save();
+
+        return res.status(200).json({ message: 'Password has been reset successfully.' });
+
+    } catch (err) {
+        console.error('Reset password error:', err);
+        return res.status(400).json({ message: 'Invalid or expired token.' });
     }
+};
 
-    doctor.password = newPassword.trim();  // ✅ Let pre-save hook hash it
-    await doctor.save();
+export const uploadDoctorVideo = async (req, res) => {
+    try {
+        const { patientId } = req.params;
+        const { context, title } = req.body;
 
-    return res.status(200).json({ message: 'Password has been reset successfully.' });
+        if (!req.file) {
+            return res.status(400).json({ message: 'No video uploaded' });
+        }
 
-  } catch (err) {
-    console.error('Reset password error:', err);
-    return res.status(400).json({ message: 'Invalid or expired token.' });
-  }
+        const normalizedPath = path.normalize(req.file.path);
+
+        // Validate patient existence
+        const patient = await Patient.findOne({ patientId });
+        if (!patient) {
+            return res.status(404).json({ message: 'Patient not found' });
+        }
+
+        const videoMeta = {
+            title: title || `Doctor Video - ${context}`,
+            videoUrl: normalizedPath,
+            uploadedBy: req.doctor._id,
+            uploadedAt: new Date(),
+            context,
+        };
+
+        // ✅ Push video directly using update operator to avoid full doc validation
+        await Patient.updateOne(
+            { patientId },
+            { $push: { videos: videoMeta } }
+        );
+
+        // Doctor video update
+        const doctor = await Doctor.findById(req.doctor._id);
+        if (!doctor) {
+            return res.status(404).json({ message: 'Doctor not found' });
+        }
+
+        doctor.videos = doctor.videos || [];
+        doctor.videos.push({
+            title: videoMeta.title,
+            videoUrl: videoMeta.videoUrl,
+            context: videoMeta.context,
+            uploadedAt: videoMeta.uploadedAt,
+        });
+        await doctor.save();
+
+        res.status(200).json({
+            message: 'Video uploaded successfully',
+            video: videoMeta,
+        });
+
+    } catch (err) {
+        console.error('Upload Error:', err);
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+};
+
+
+
+export const getDoctorVideos = async (req, res) => {
+    try {
+        const doctor = await Doctor.findById(req.doctor._id);
+
+        if (!doctor) {
+            return res.status(404).json({ message: 'Doctor not found' });
+        }
+
+        res.status(200).json(doctor.videos || []);
+    } catch (err) {
+        console.error('Fetch Videos Error:', err);
+        res.status(500).json({ error: 'Failed to fetch videos', details: err.message });
+    }
+};
+
+export const streamDoctorVideo = async (req, res) => {
+    try {
+        const { videoId } = req.params;
+
+        const doctor = req.doctor;
+        if (!doctor) return res.status(401).json({ message: 'Doctor not authenticated' });
+
+        console.log("Doctor ID:", doctor._id);
+        console.log("Doctor Videos:", doctor.videos.map(v => v._id.toString()));
+        console.log("Requested Video ID:", videoId);
+
+        const video = doctor.videos.find(v => v._id.toString() === videoId);
+        if (!video) return res.status(404).json({ message: 'Video not found' });
+
+        const videoPath = path.resolve(video.videoUrl);
+        if (!fs.existsSync(videoPath)) {
+            return res.status(404).json({ message: 'Video file not found on server' });
+        }
+
+        const stat = fs.statSync(videoPath);
+        const fileSize = stat.size;
+        const range = req.headers.range;
+
+        if (!range) {
+            return res.status(400).send("Requires Range header");
+        }
+
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+        const contentLength = end - start + 1;
+        const headers = {
+            "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+            "Accept-Ranges": "bytes",
+            "Content-Length": contentLength,
+            "Content-Type": "video/mp4",
+        };
+
+        res.writeHead(206, headers);
+        const videoStream = fs.createReadStream(videoPath, { start, end });
+        videoStream.pipe(res);
+    } catch (err) {
+        console.error("Stream Error:", err);
+        res.status(500).json({ message: "Internal Server Error", error: err.message });
+    }
 };

@@ -8,8 +8,11 @@ import { verifyAccess } from '../../middlewares/auth.middleware.js';
 import { authorize, authorizeAdminOnly } from '../../middlewares/role.middleware.js';
 
 
-import { resetDoctorPassword , getDoctorPatients , resetPassword } from '../../Controller/doctor/doctor.controller.js';
-import { getPatientDetails , getPatientCounts } from "../../Controller/doctor/doctor.controller.js";
+import { resetDoctorPassword , getDoctorPatients , resetPassword,requestPasswordReset , getDoctorVideos} from '../../Controller/doctor/doctor.controller.js';
+import { getPatientDetails , getPatientCounts , uploadDoctorVideo , streamDoctorVideo} from "../../Controller/doctor/doctor.controller.js";
+
+import uploadVideoMiddleware  from '../../middlewares/videoUpload.middleware.js';
+import { verifyDoctorToken } from '../../middlewares/authDoctor.middleware.js';
 
 const router = express.Router();
   
@@ -19,23 +22,23 @@ router.post('/login', loginDoctor);
 router.get('/profile', getAllDoctors);
 
 // ✅ Protected routes
-router.get('/profile/:id',verifyAccess,authorize('admin', 'doctor'),getDoctorById);
+router.get('/profile/:id',verifyAccess(['doctor']),getDoctorById);
 
-router.delete('/:id',verifyAccess,authorizeAdminOnly,deleteDoctor);
+router.delete('/delete/:id',verifyAccess(['doctor']),deleteDoctor);
 
-router.put('/update/:id',verifyAccess,authorize('admin', 'doctor'),upload.single('profile'),updateDoctor);
+router.put('/update/:id',verifyAccess(['doctor']),upload.single('profile'),updateDoctor);
 
-router.post('/upload-degree/:id',verifyAccess,authorize('doctor'),upload.single('degreePhoto'),uploadDegreePhoto);
+router.post('/upload-degree/:id',verifyAccess(['doctor']),upload.single('degreePhoto'),uploadDegreePhoto);
 
-router.post('/change-password',verifyAccess(['doctor']),authorize('doctor'),changePassword);
+router.post('/change-password',verifyAccess(['doctor']),changePassword);
 
 router.post('/change-password-confirm', confirmChangePassword);
 
-router.post('/reset-password', resetPassword);
+router.post('/reset-password-request', requestPasswordReset);
 
 router.post('/reset-password/:token', resetDoctorPassword);
 
-router.post('/logout', verifyAccess, logoutDoctor);
+router.post('/logout', verifyAccess(['doctor']), logoutDoctor);
 
 router.get('/patients', verifyAccess(['doctor']), getDoctorPatients);
 
@@ -43,5 +46,10 @@ router.get("/patients/:patientId", verifyAccess(['doctor']), getPatientDetails);
 
 router.get("/dashboard/patient-counts", verifyAccess(['doctor']), getPatientCounts);
 
+router.post('/upload-video/:patientId',verifyAccess(['doctor']), uploadVideoMiddleware, uploadDoctorVideo);
+
+router.get('/videos', verifyAccess(['doctor']), getDoctorVideos);
+
+router.get('/videos/stream/:videoId', verifyAccess(['doctor']) ,streamDoctorVideo);
 
 export default router;
