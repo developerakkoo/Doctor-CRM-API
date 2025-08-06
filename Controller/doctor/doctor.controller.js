@@ -14,6 +14,8 @@ import mongoose from 'mongoose';
 import { getCoordinates } from '../../utils/getCoordinates.js';
 
 import Patient from '../../Modals/patient/patient.js';
+import Appointment from '../../Modals/patient/appointment.js';
+import moment from 'moment';
 
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -724,4 +726,72 @@ export const streamDoctorVideo = async (req, res) => {
         console.error("Stream Error:", err);
         res.status(500).json({ message: "Internal Server Error", error: err.message });
     }
+};
+
+export const getTodaysAppointments = async (req, res) => {
+  try {
+    const doctorId = req.doctor.doctorId; // from JWT
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1); // Start of tomorrow
+
+    // ✅ Fixed date comparison logic
+    const appointments = await Appointment.find({
+      doctorId,
+      appointmentDate: {
+        $gte: today,
+        $lt: tomorrow
+      }
+    })
+      .populate('patientId', 'name age gender') // Optional: add more fields if needed
+      .sort({ appointmentTime: 1 }); // Sort by time
+
+    res.status(200).json({ appointments });
+  } catch (error) {
+    console.error("Error fetching today's appointments:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+
+export const createAppointment = async (req, res) => {
+  try {
+    const { patientId, doctorId, appointmentDate, appointmentTime, notes } = req.body;
+
+    // ✅ Validation for required fields
+    if (!patientId || !doctorId || !appointmentDate || !appointmentTime) {
+      return res.status(400).json({ message: 'All required fields must be filled' });
+    }
+
+    // ✅ Confirm patient and doctor exist
+    const patient = await Patient.findById(patientId);
+    const doctor = await Doctor.findById(doctorId);
+
+    if (!patient || !doctor) {
+      return res.status(404).json({ message: 'Doctor or patient not found' });
+    }
+
+    // ✅ Convert string date to JS Date object
+    const newAppointment = new Appointment({
+      patientId,
+      doctorId,
+      appointmentDate: new Date(appointmentDate),
+      appointmentTime,
+      status: 'Scheduled',
+      notes: notes || ''
+    });
+
+    await newAppointment.save();
+
+    res.status(201).json({
+      message: 'Appointment created successfully',
+      appointment: newAppointment
+    });
+  } catch (error) {
+    console.error('Create appointment error:', error);
+    res.status(500).json({ message: 'Internal Server Error', error });
+  }
 };
