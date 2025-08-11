@@ -12,8 +12,8 @@ if (!JWT_SECRET) {
 }
 export const verifyAccess = (allowedRoles = []) => async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith("Bearer ") 
-    ? authHeader.split(" ")[1] 
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.split(" ")[1]
     : req.query.token;
 
   if (!token) {
@@ -31,6 +31,10 @@ export const verifyAccess = (allowedRoles = []) => async (req, res, next) => {
     if (!allowedRoles.includes(role)) {
       return res.status(403).json({ success: false, message: "Forbidden: Insufficient permissions" });
     }
+
+    if (decoded.role === 'doctor') req.doctor = decoded;
+    if (decoded.role === 'patient') req.patient = decoded;
+    if (decoded.role === 'subadmin') req.subadmin = decoded;
 
     // Role-specific data attachment
     if (role === "doctor") {

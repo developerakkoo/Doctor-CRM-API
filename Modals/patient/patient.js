@@ -17,16 +17,15 @@ const prescriptionSchema = new mongoose.Schema({
   prescribedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor' }
 }, { _id: true });
 
-
 const billSchema = new mongoose.Schema({
   _id: {
     type: mongoose.Schema.Types.ObjectId,
-    default: () => new mongoose.Types.ObjectId(), // explicitly assign a unique ObjectId as billId
+    default: () => new mongoose.Types.ObjectId(),
   },
   billNo: {
     type: Number,
     required: true,
-    unique: false // remove 'unique' since these are embedded documents
+    unique: false
   },
   services: [
     {
@@ -49,7 +48,7 @@ const billSchema = new mongoose.Schema({
   fileUrl: {
     type: String
   }
-}, { _id: false }); // _id is defined manually above
+}, { _id: false });
 
 const videoSchema = new mongoose.Schema({
   title: String,
@@ -59,6 +58,21 @@ const videoSchema = new mongoose.Schema({
   uploadedAt: { type: Date, default: Date.now }
 }, { _id: true });
 
+const appointmentSchema = new mongoose.Schema({
+  appointmentDate: { type: Date, required: true },
+  reason: String,
+  doctorId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Doctor',
+    required: true
+  },
+  status: {
+    type: String,
+    enum: ['Scheduled', 'Completed', 'Cancelled'],
+    default: 'Scheduled'
+  },
+  notes: String
+}, { timestamps: true });
 
 const patientSchema = new mongoose.Schema({
   userId: {
@@ -91,18 +105,32 @@ const patientSchema = new mongoose.Schema({
   prescriptions: [prescriptionSchema],
   bills: [billSchema],
   videos: [videoSchema],
+  appointments: [appointmentSchema],
   createdAt: { type: Date, default: Date.now }
 });
 
-
-
-
-// ✅ Auto-hash password before saving
+// Auto-hash password before saving
 patientSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });
+
+// Validate billNo only for new or modified bills
+patientSchema.pre('save', function (next) {
+  if (this.isModified('bills')) {
+    this.bills.forEach((bill, index) => {
+      // bill.isNew works for subdocs created in this session
+      const billModified = bill.isNew ||
+        (typeof bill.isModified === 'function' && bill.isModified('billNo'));
+      if (billModified && !bill.billNo) {
+        return next(new Error(`billNo is required for bill at index ${index}`));
+      }
+    });
+  }
+  next();
+});
+
 
 const Patient = mongoose.model('Patient', patientSchema);
 export default Patient;

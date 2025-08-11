@@ -11,7 +11,7 @@ import { generateBillPDF } from '../../utils/generateBillPDF.js';
 import Appointment from '../../Modals/patient/appointment.js';
 import mongoose from 'mongoose';
 import Counter from '../../Modals/patient/counter.js'; // adjust path accordingly
-
+import Doctor from '../../Modals/doctor/Doctor.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -37,21 +37,23 @@ export const createPatient = async (req, res) => {
       gender,
       phone,
       address,
-      doctorId:req.doctor._id,
+      doctorId: req.doctor._id,
       createdBy: req.doctor._id,
     });
 
     await newPatient.save();
 
-    res.status(201).json({ message: "Patient created successfully", patient: {
-      _id: newPatient._id,
+    res.status(201).json({
+      message: "Patient created successfully", patient: {
+        _id: newPatient._id,
         fullName: newPatient.fullName,
         patientId: newPatient.patientId,
         doctorId: newPatient.doctorId,
         gender: newPatient.gender,
         phone: newPatient.phone,
         dob: newPatient.dob
-    } });
+      }
+    });
   } catch (err) {
     console.error("Create Patient Error:", err.message);
     res.status(500).json({ message: "Server error" });
@@ -378,20 +380,135 @@ export const scheduleAppointment = async (req, res) => {
   }
 };
 
-export const getAllAppointments = async (req, res) => {
+export const getTodaysAppointmentsForPatient = async (req, res) => {
   try {
-    const patientId = req.patient.patientId;
+    const rawId = req.patient?.patientId || req.user?.patientId || req.user?.id;
+    if (!rawId) {
+      return res.status(401).json({ success: false, message: "Unauthorized access" });
+    }
 
-    const appointments = await Appointment.find({ patientId }).sort({ preferredDate: -1, preferredTime: -1 });
+    let patient;
+    if (mongoose.Types.ObjectId.isValid(rawId)) {
+      patient = await Patient.findOne({ userId: rawId }).populate("appointments.doctorId");
+      if (!patient) {
+        patient = await Patient.findById(rawId).populate("appointments.doctorId");
+      }
+    } else {
+      patient = await Patient.findOne({ patientId: rawId }).populate("appointments.doctorId");
+    }
 
-    res.status(200).json({
+    if (!patient) {
+      return res.status(404).json({ success: false, message: "Patient not found" });
+    }
+
+    // Start and end of today in UTC
+    const now = new Date();
+    const startOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    const endOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+
+    const todaysAppointments = (patient.appointments || []).filter(appt => {
+      const apptDate = new Date(appt.appointmentDate);
+      return apptDate >= startOfDayUTC && apptDate <= endOfDayUTC;
+    });
+
+    return res.status(200).json({
       success: true,
-      message: 'Appointments fetched successfully',
-      appointments
+      count: todaysAppointments.length,
+      appointments: todaysAppointments
     });
 
   } catch (error) {
-    console.error('Error fetching appointments:', error);
-    res.status(500).json({ success: false, message: 'Internal Server Error' });
+    console.error("Error fetching today's appointments for patient:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+
+export const createPatientAppointment = async (req, res) => {
+  try {
+    const { doctorId, appointmentDate, reason } = req.body;
+    const jwtPatientId = req.patient?.patientId; // patientId from JWT
+    const jwtUserId = req.user?.id; // userId from JWT
+
+    if (!doctorId || !appointmentDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Doctor ID and appointment date are required"
+      });
+    }
+
+    // Find patient
+    let patient = null;
+    if (jwtPatientId) {
+      patient = await Patient.findOne({ patientId: jwtPatientId });
+    } else if (jwtUserId) {
+      patient = await Patient.findOne({ userId: jwtUserId });
+    }
+
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
+
+    // Check doctor exists
+    const doctor = await Doctor.findById(doctorId);
+    if (!doctor) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor not found"
+      });
+    }
+
+    // Set doctorId if missing
+    if (!patient.doctorId) {
+      patient.doctorId = doctorId;
+    }
+
+    // Prepare appointment date
+    const apptDateObj = new Date(appointmentDate);
+
+    // Prevent duplicate appointment (same doctor, same date)
+    const alreadyExists = patient.appointments.some(
+      appt =>
+        appt.doctorId.toString() === doctorId &&
+        new Date(appt.appointmentDate).toDateString() === apptDateObj.toDateString()
+    );
+    if (alreadyExists) {
+      return res.status(400).json({
+        success: false,
+        message: "Appointment already exists for this date and doctor"
+      });
+    }
+
+    // Add appointment
+    patient.appointments.push({
+      doctorId,
+      appointmentDate: apptDateObj,
+      reason,
+      status: "Scheduled"
+    });
+
+    // Save without triggering validation for unchanged fields
+    await patient.save({ validateModifiedOnly: true });
+
+    // Populate doctor info for the new appointment only
+    await patient.populate({
+      path: "appointments.doctorId",
+      match: { _id: doctorId } // only populate the one we just added
+    });
+
+    const savedAppointment = patient.appointments[patient.appointments.length - 1];
+
+    res.status(201).json({
+      success: true,
+      message: "Appointment created successfully",
+      appointment: savedAppointment
+    });
+
+  } catch (error) {
+    console.error("Error creating appointment:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };

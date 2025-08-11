@@ -730,15 +730,19 @@ export const streamDoctorVideo = async (req, res) => {
 
 export const getTodaysAppointments = async (req, res) => {
   try {
-    const doctorId = req.doctor.doctorId; // from JWT
+    const doctorId = req.doctor?._id; 
+    if (!doctorId) {
+      return res.status(401).json({ message: "Unauthorized access" });
+    }
 
+    // Get today's date at midnight
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Start of today
+    today.setHours(0, 0, 0, 0); // 00:00:00
 
+    // Get tomorrow's date at midnight
     const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1); // Start of tomorrow
+    tomorrow.setDate(today.getDate() + 1);
 
-    // ✅ Fixed date comparison logic
     const appointments = await Appointment.find({
       doctorId,
       appointmentDate: {
@@ -746,8 +750,8 @@ export const getTodaysAppointments = async (req, res) => {
         $lt: tomorrow
       }
     })
-      .populate('patientId', 'name age gender') // Optional: add more fields if needed
-      .sort({ appointmentTime: 1 }); // Sort by time
+      .populate('patientId', 'name age gender') // optional: add more fields if needed
+      .sort({ appointmentTime: 1 });
 
     res.status(200).json({ appointments });
   } catch (error) {
@@ -755,7 +759,6 @@ export const getTodaysAppointments = async (req, res) => {
     res.status(500).json({ message: "Server Error" });
   }
 };
-
 
 export const createAppointment = async (req, res) => {
   try {
@@ -793,5 +796,107 @@ export const createAppointment = async (req, res) => {
   } catch (error) {
     console.error('Create appointment error:', error);
     res.status(500).json({ message: 'Internal Server Error', error });
+  }
+};
+
+export const getUpcomingAppointmentsForDoctor = async (req, res) => {
+  try {
+    const doctorIdFromJWT = req.doctor?.id || req.user?.doctorId || req.user?.id;
+
+    if (!doctorIdFromJWT) {
+      return res.status(401).json({ success: false, message: "Unauthorized access" });
+    }
+
+    let doctor;
+    if (mongoose.Types.ObjectId.isValid(doctorIdFromJWT)) {
+      doctor = await Doctor.findById(doctorIdFromJWT);
+    }
+
+    if (!doctor) {
+      return res.status(404).json({ success: false, message: "Doctor not found" });
+    }
+
+    // Start of now
+    const now = moment().startOf("day").toDate();
+
+    // Find all patients having appointments with this doctor in future (including today)
+    const patients = await Patient.find({
+      "appointments.doctorId": doctor._id,
+      "appointments.appointmentDate": { $gte: now }
+    }).populate("appointments.doctorId").populate("userId"); // populate patient user info
+
+    // Flatten and filter only the upcoming appointments for this doctor
+    const upcomingAppointments = [];
+    patients.forEach(patient => {
+      patient.appointments.forEach(appt => {
+        if (
+          appt.doctorId &&
+          appt.doctorId._id.toString() === doctor._id.toString() &&
+          new Date(appt.appointmentDate) >= now
+        ) {
+          upcomingAppointments.push({
+            patientId: patient._id,
+            patientName: patient.userId?.name || "Unknown",
+            appointmentDate: appt.appointmentDate,
+            reason: appt.reason,
+            status: appt.status,
+            doctorId: appt.doctorId._id,
+            doctorName: appt.doctorId.name
+          });
+        }
+      });
+    });
+
+    // Sort by date ascending
+    upcomingAppointments.sort((a, b) => new Date(a.appointmentDate) - new Date(b.appointmentDate));
+
+    res.status(200).json({
+      success: true,
+      count: upcomingAppointments.length,
+      appointments: upcomingAppointments
+    });
+
+  } catch (error) {
+    console.error("Error fetching upcoming appointments for doctor:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getFilteredAppointments = async (req, res) => {
+  try {
+    const { dateFilter = "all", status = "all" } = req.query;
+    let dateQuery = {};
+
+    const today = moment().startOf("day");
+
+    // Date filter handling
+    if (dateFilter === "today") {
+      dateQuery.date = { $gte: today.toDate(), $lt: moment(today).endOf("day").toDate() };
+    } else if (dateFilter === "week") {
+      dateQuery.date = { $gte: today.toDate(), $lt: moment(today).add(7, "days").endOf("day").toDate() };
+    } else if (dateFilter === "month") {
+      dateQuery.date = { $gte: today.toDate(), $lt: moment(today).add(1, "month").endOf("day").toDate() };
+    }
+    // "all" → no date filter
+
+    // Status filter handling
+    let statusQuery = {};
+    if (status !== "all") {
+      statusQuery.status = status;
+    }
+
+    // Combine filters
+    const appointments = await Appointment.find({
+      ...dateQuery,
+      ...statusQuery,
+    })
+      .populate("patientId")
+      .populate("doctorId")
+      .sort({ date: 1, time: 1 });
+
+    res.status(200).json({ success: true, data: appointments });
+  } catch (error) {
+    console.error("Error fetching filtered appointments:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };

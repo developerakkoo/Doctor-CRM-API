@@ -7,11 +7,11 @@ import { getPatientBills } from '../../Controller/patient/patient.controller.js'
 
 import { sendMessageToDoctor , getChatHistory  } from '../../Controller/patient/chat.controller.js';
 
-import { addReport , addPrescription ,addBill} from '../../Controller/patient/patient.controller.js';
+import { addReport , addPrescription ,addBill , getTodaysAppointmentsForPatient , createPatientAppointment } from '../../Controller/patient/patient.controller.js';
 
 import { scheduleAppointment } from '../../Controller/patient/patient.controller.js';
 
-import { getAllAppointments } from '../../Controller/patient/patient.controller.js';
+// import { getAllAppointments } from '../../Controller/patient/patient.controller.js';
 
 const router = express.Router();
 
@@ -40,8 +40,13 @@ router.post('/chat/send', verifyAccess(['patient']), sendMessageToDoctor);
 
 router.get('/chat/history', verifyAccess(['patient']), getChatHistory);
 
-router.post('/appointments/schedule', verifyAccess(['patient']), scheduleAppointment);
+// router.post('/appointments/schedule', verifyAccess(['patient']), scheduleAppointment);
 
-router.get('/appointments', verifyAccess(['patient']), getAllAppointments);
+// router.get('/appointments', verifyAccess(['patient']), getAllAppointments);
+
+// appointment routes --> 
+router.post('/appointments/create', verifyAccess(['patient']), createPatientAppointment);
+
+router.get('/appointments/today', verifyAccess(['patient']), getTodaysAppointmentsForPatient);
 
 export default router;
