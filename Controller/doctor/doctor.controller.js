@@ -905,3 +905,78 @@ export const getFilteredAppointments = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+export const getRecentPatientsForDoctor = async (req, res) => {
+  try {
+    if (!req.doctor?._id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const recentPatients = await Patient.find({ doctorId: req.doctor._id })
+      .sort({ createdAt: -1 })
+      .limit(5) // show only last 5 patients
+      .select("patientId firstName lastName email phone createdAt");
+
+    res.status(200).json({
+      success: true,
+      recentPatients
+    });
+  } catch (err) {
+    console.error("Get Recent Patients Error:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// GET /api/v1/doctors/patients/stats
+export const getPatientsStats = async (req, res) => {
+  try {
+    const doctorId = req.doctor?.doctorId || req.user?.doctorId;
+
+    if (!doctorId) {
+      return res.status(401).json({ success: false, message: "Unauthorized access" });
+    }
+
+    const now = new Date();
+    const startOfToday = new Date(now.setHours(0, 0, 0, 0));
+
+    // Total patients for doctor
+    const totalCount = await Patient.countDocuments({ doctorId });
+
+    // New patients today
+    const newCount = await Patient.countDocuments({
+      doctorId,
+      createdAt: { $gte: startOfToday },
+    });
+
+    // Contacted patients
+    const contactedCount = await Patient.countDocuments({
+      doctorId,
+      status: "Contacted",
+    });
+
+    // Qualified patients
+    const qualifiedCount = await Patient.countDocuments({
+      doctorId,
+      status: "Qualified",
+    });
+
+    // Converted patients
+    const convertedCount = await Patient.countDocuments({
+      doctorId,
+      status: "Converted",
+    });
+
+    res.json({
+      success: true,
+      data: {
+        total: totalCount,
+        new: newCount,
+        contacted: contactedCount,
+        qualified: qualifiedCount,
+        converted: convertedCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getPatientsStats:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};

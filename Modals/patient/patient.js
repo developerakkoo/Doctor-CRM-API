@@ -159,9 +159,6 @@ patientSchema.pre('save', async function (next) {
     const seq = Math.floor(1000 + Math.random() * 9000); // random 4 digits
     this.patientId = `PAT${dateStr}${seq}`;
   }
-  if (this.isModified('password')) {
-    this.password = await bcrypt.hash(this.password, 10);
-  }
   next();
 });
 

@@ -49,4 +49,8 @@ router.post('/appointments/create', verifyAccess(['patient']), createPatientAppo
 
 router.get('/appointments/today', verifyAccess(['patient']), getTodaysAppointmentsForPatient);
 
+//  /api/doctors/recent-patients
+
+
+
 export default router;
