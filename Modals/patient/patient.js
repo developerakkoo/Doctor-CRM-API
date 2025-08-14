@@ -91,10 +91,32 @@ const patientSchema = new mongoose.Schema({
     ref: 'Doctor',
     required: true
   },
-  fullName: { type: String, required: true },
-  patientId: { type: String, required: true, unique: true },
+firstName: { type: String, required: true },
+  lastName: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  patientId: { type: String, unique: true },
   password: { type: String, required: true, select: false },
+  insuranceProvider: { type: String, required: true },
+
   dob: Date,
+  source: { 
+    type: String, 
+    enum: ['referral', 'social media', 'google ads', 'walk-in', 'phone call', 'email', 'other'],
+    required: true
+  },
+  priority: { 
+    type: String, 
+    enum: ['high', 'medium', 'low'], 
+    required: true 
+  },
+  initialStatus: { 
+    type: String, 
+    enum: ['contact', 'qualified'], 
+    required: true 
+  },
+  referredBy: String,
+  initialNotes: String,
+
   gender: { type: String, enum: ['Male', 'Female', 'Other'] },
   phone: { type: String, unique: true, sparse: true },
   address: String,
@@ -127,6 +149,18 @@ patientSchema.pre('save', function (next) {
         return next(new Error(`billNo is required for bill at index ${index}`));
       }
     });
+  }
+  next();
+});
+patientSchema.pre('save', async function (next) {
+  if (!this.patientId) {
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0,10).replace(/-/g, '');
+    const seq = Math.floor(1000 + Math.random() * 9000); // random 4 digits
+    this.patientId = `PAT${dateStr}${seq}`;
+  }
+  if (this.isModified('password')) {
+    this.password = await bcrypt.hash(this.password, 10);
   }
   next();
 });

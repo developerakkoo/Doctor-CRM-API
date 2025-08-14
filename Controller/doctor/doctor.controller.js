@@ -361,42 +361,41 @@ export const confirmChangePassword = async (req, res) => {
 
 
 export const requestPasswordReset = async (req, res) => {
-    const { email } = req.body;
+  const { email } = req.body;
 
-    try {
-        const doctor = await Doctor.findOne({ email });
-        if (!doctor) {
-            return res.status(404).json({ message: 'Doctor not found' });
-        }
-
-        // Generate reset token
-        const resetToken = crypto.randomBytes(32).toString('hex');
-        const tokenExpiry = Date.now() + 1000 * 60 * 15; // valid for 15 minutes
-
-        doctor.resetPasswordToken = resetToken;
-        doctor.resetPasswordExpires = tokenExpiry;
-        await doctor.save();
-
-        // Construct reset link
-
-        const resetLink = `http://localhost:5173/reset-password?token=${resetToken}`;
-
-        // Send email (dummy function or actual SMTP)
-        await sendEmail({
-            to: doctor.email,
-            subject: 'Password Reset',
-            text: `Reset your password here: ${resetLink}`,
-        });
-
-
-        res.status(200).json({ message: 'Password reset link sent to email' });
-
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Server error' });
+  try {
+    const doctor = await Doctor.findOne({ email });
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor not found' });
     }
-};
 
+    // Generate token (plain)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+
+    // Hash token before saving to DB
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    doctor.resetPasswordToken = hashedToken;
+    doctor.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 min
+    await doctor.save();
+
+    // Construct link with plain token
+    const resetLink = `http://localhost:5173/reset-password?token=${resetToken}`;
+
+    // Send email
+    await sendEmail({
+      to: doctor.email,
+      subject: 'Password Reset Request',
+      text: `You requested a password reset. Use the link below within 15 minutes:\n\n${resetLink}`,
+    });
+
+    res.status(200).json({ message: 'Password reset link sent to email' });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
 
 
 export const getDoctorById = async (req, res) => {
@@ -437,38 +436,46 @@ export const getDoctorById = async (req, res) => {
 };
 
 export const resetDoctorPassword = async (req, res) => {
-    const { token } = req.params;
+  try {
+    // Get token from params, query, or body
+    const token = req.params.token || req.query.token || req.body.token;
     const { newPassword } = req.body;
 
-    try {
-        // Find doctor by token and ensure it's not expired
-        const doctor = await Doctor.findOne({
-            resetPasswordToken: token,
-            resetPasswordExpires: { $gt: Date.now() }
-        }).select('+password'); // Include password field (was excluded by default)
-
-        if (!doctor) {
-            return res.status(400).json({ message: 'Invalid or expired token' });
-        }
-
-        // Hash new password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-        // Set new password and clear reset token fields
-        doctor.password = hashedPassword;
-        doctor.resetPasswordToken = undefined;
-        doctor.resetPasswordExpires = undefined;
-
-        await doctor.save();
-
-        return res.status(200).json({ message: 'Password has been reset successfully' });
-
-    } catch (error) {
-        console.error(' Error resetting password:', error);
-        return res.status(500).json({ message: 'Server error' });
+    if (!token) {
+      return res.status(400).json({ message: 'Token is required' });
     }
+
+    if (!newPassword) {
+      return res.status(400).json({ message: 'New password is required' });
+    }
+
+    // Hash the token to match the stored version
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find doctor with matching hashed token and valid expiry
+    const doctor = await Doctor.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: Date.now() }
+    }).select('+password');
+
+    if (!doctor) {
+      return res.status(400).json({ message: 'Invalid or expired token' });
+    }
+
+    // Update password
+    doctor.password = newPassword; // pre-save hook will hash it
+    doctor.resetPasswordToken = undefined;
+    doctor.resetPasswordExpires = undefined;
+
+    await doctor.save();
+
+    return res.status(200).json({ message: 'Password has been reset successfully' });
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
 };
+
 
 export const logoutDoctor = async (req, res) => {
     try {
@@ -631,7 +638,7 @@ export const uploadDoctorVideo = async (req, res) => {
             context,
         };
 
-        // ✅ Push video directly using update operator to avoid full doc validation
+        //  Push video directly using update operator to avoid full doc validation
         await Patient.updateOne(
             { patientId },
             { $push: { videos: videoMeta } }
@@ -662,8 +669,6 @@ export const uploadDoctorVideo = async (req, res) => {
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 };
-
-
 
 export const getDoctorVideos = async (req, res) => {
     try {

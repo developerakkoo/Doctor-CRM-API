@@ -18,40 +18,73 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // Create new patient
 export const createPatient = async (req, res) => {
   try {
-    const { fullName, patientId, password, dob, gender, phone, address } = req.body;
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      dob,
+      insuranceProvider,
+      address,
+      source,
+      priority,
+      initialStatus,
+      referredBy,
+      initialNotes,
+      password
+    } = req.body;
 
     if (!req.doctor?._id) {
       return res.status(401).json({ message: "Unauthorized: Doctor ID missing" });
     }
 
-    const existing = await Patient.findOne({ patientId });
-    if (existing) {
-      return res.status(400).json({ message: "Patient with this ID already exists" });
-    }
+    // Check duplicates
+    const existingEmail = await Patient.findOne({ email });
+    if (existingEmail) return res.status(400).json({ message: "Email already in use" });
+
+    const existingPhone = await Patient.findOne({ phone });
+    if (existingPhone) return res.status(400).json({ message: "Phone already in use" });
+    // ✅ Generate patientId here
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+    const seq = Math.floor(1000 + Math.random() * 9000); // 4-digit random
+    const generatedPatientId = `PAT${dateStr}${seq}`;
 
     const newPatient = new Patient({
-      fullName,
-      patientId,
-      password,  // ✅ plain text here; schema will hash it
-      dob,
-      gender,
+      firstName,
+      lastName,
+      email,
       phone,
+      dob,
+      insuranceProvider,
       address,
+      source,
+      priority,
+      initialStatus,
+      referredBy,
+      initialNotes,
+      password,
       doctorId: req.doctor._id,
       createdBy: req.doctor._id,
+      patientId: generatedPatientId
     });
 
     await newPatient.save();
 
     res.status(201).json({
-      message: "Patient created successfully", patient: {
+      message: "Patient created successfully",
+      patient: {
         _id: newPatient._id,
-        fullName: newPatient.fullName,
         patientId: newPatient.patientId,
-        doctorId: newPatient.doctorId,
-        gender: newPatient.gender,
+        firstName: newPatient.firstName,
+        lastName: newPatient.lastName,
+        email: newPatient.email,
         phone: newPatient.phone,
-        dob: newPatient.dob
+        dob: newPatient.dob,
+        insuranceProvider: newPatient.insuranceProvider,
+        source: newPatient.source,
+        priority: newPatient.priority,
+        initialStatus: newPatient.initialStatus
       }
     });
   } catch (err) {
@@ -59,6 +92,7 @@ export const createPatient = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 // Login Patient
 export const loginPatient = async (req, res) => {
   const { patientId, password } = req.body;
