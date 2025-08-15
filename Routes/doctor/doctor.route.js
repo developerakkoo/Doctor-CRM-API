@@ -9,7 +9,7 @@ import { authorize, authorizeAdminOnly } from '../../middlewares/role.middleware
 
 
 import { resetDoctorPassword , getDoctorPatients , resetPassword,requestPasswordReset , getDoctorVideos } from '../../Controller/doctor/doctor.controller.js';
-import { getPatientDetails , getPatientCounts , createAppointment, uploadDoctorVideo ,
+import { getPatientDetails , getPatientCounts , createAppointment, uploadDoctorVideo , getFilteredPatients,
         streamDoctorVideo , getTodaysAppointments , getUpcomingAppointmentsForDoctor , getFilteredAppointments , getRecentPatientsForDoctor , getPatientsStats } from "../../Controller/doctor/doctor.controller.js";
 
 import uploadVideoMiddleware  from '../../middlewares/videoUpload.middleware.js';
@@ -69,5 +69,6 @@ router.get('/recent-patients', verifyAccess(['doctor']), getRecentPatientsForDoc
 // routes/patientRoutes.js
 router.get('/stats',verifyAccess(['doctor']) , getPatientsStats);
 
+router.get("/patients/filter", verifyAccess(['doctor']), getFilteredPatients);
 
 export default router;
