@@ -7,7 +7,7 @@ import { getPatientBills } from '../../Controller/patient/patient.controller.js'
 
 import { sendMessageToDoctor , getChatHistory  } from '../../Controller/patient/chat.controller.js';
 
-import { addReport , addPrescription ,addBill , getTodaysAppointmentsForPatient , createPatientAppointment } from '../../Controller/patient/patient.controller.js';
+import { addReport , addPrescription ,addBill , getTodaysAppointmentsForPatient , createPatientAppointment , getFilteredPatients } from '../../Controller/patient/patient.controller.js';
 
 import { scheduleAppointment } from '../../Controller/patient/patient.controller.js';
 
@@ -51,6 +51,6 @@ router.get('/appointments/today', verifyAccess(['patient']), getTodaysAppointmen
 
 //  /api/doctors/recent-patients
 
-
+router.get("/filter", verifyAccess(['doctor']), getFilteredPatients);
 
 export default router;

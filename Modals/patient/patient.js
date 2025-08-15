@@ -62,7 +62,7 @@ const patientSchema = new mongoose.Schema({
   password: { type: String, required: true, select: false },
   insuranceProvider: { type: String, required: true },
   dob: Date,
-  source: { type: String, enum: ['referral','social media','google ads','walk-in','phone call','email','other'], required: true },
+  source: { type: String, enum: ['website','referral','social media','google ads','walk-in','phone call','email','other'], required: true },
   priority: { type: String, enum: ['high','medium','low'], required: true },
   initialStatus: { type: String, enum: ['contact','qualified'], required: true },
   referredBy: String,

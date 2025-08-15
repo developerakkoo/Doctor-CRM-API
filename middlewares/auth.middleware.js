@@ -32,19 +32,24 @@ export const verifyAccess = (allowedRoles = []) => async (req, res, next) => {
 
     // Attach role-specific objects
     if (role === "doctor") {
-      if (!decoded.doctorId) return res.status(400).json({ success: false, message: "doctorId missing in token" });
+      if (!decoded.doctorId) 
+        return res.status(400).json({ success: false, message: "doctorId missing in token" });
 
       const doctor = await Doctor.findById(decoded.doctorId).select("-password");
-      if (!doctor) return res.status(404).json({ success: false, message: "Doctor not found" });
+      if (!doctor) 
+        return res.status(404).json({ success: false, message: "Doctor not found" });
 
+      // Ensure doctorId is always string for filtering
       req.doctor = { ...doctor.toObject(), doctorId: doctor._id.toString() };
       console.log("👨‍⚕️ Doctor attached to req:", req.doctor);
     } 
     else if (role === "patient") {
-      if (!decoded.patientId) return res.status(400).json({ success: false, message: "patientId missing in token" });
+      if (!decoded.patientId) 
+        return res.status(400).json({ success: false, message: "patientId missing in token" });
 
       const patient = await Patient.findOne({ patientId: decoded.patientId }).select("-password");
-      if (!patient) return res.status(404).json({ success: false, message: "Patient not found" });
+      if (!patient) 
+        return res.status(404).json({ success: false, message: "Patient not found" });
 
       req.patient = patient;
       console.log("🧑 Patient attached to req:", req.patient);

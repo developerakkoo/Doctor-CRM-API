@@ -555,3 +555,65 @@ export const createPatientAppointment = async (req, res) => {
   }
 };
 
+
+export const getFilteredPatients = async (req, res) => {
+  try {
+    const doctorId = req.doctor?.doctorId;
+    if (!doctorId) {
+      return res.status(401).json({ success: false, message: "Unauthorized access" });
+    }
+
+    const { search = "", status = "all", priority = "all", limit = 50, page = 1 } = req.query;
+
+    // 🔹 Correctly create ObjectId using 'new'
+    const andConditions = [{ doctorId: new mongoose.Types.ObjectId(doctorId) }];
+
+    // 🔹 Search filter
+    if (search.trim()) {
+      const regex = new RegExp(search.trim(), "i");
+      andConditions.push({
+        $or: [
+          { firstName: regex },
+          { lastName: regex },
+          { fullName: regex },
+          { email: regex },
+          { phone: regex }
+        ]
+      });
+    }
+
+    // 🔹 Status filter
+    if (status.toLowerCase() !== "all") {
+      andConditions.push({
+        $or: [
+          { status: status.trim() },
+          { initialStatus: status.trim() }
+        ]
+      });
+    }
+
+    // 🔹 Priority filter
+    if (priority.toLowerCase() !== "all") {
+      andConditions.push({ priority: priority.trim() });
+    }
+
+    const filter = { $and: andConditions };
+    console.log("🔎 MongoDB filter:", JSON.stringify(filter, null, 2));
+
+    const patients = await Patient.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .limit(parseInt(limit));
+
+    console.log("🩺 Patients found:", patients.length);
+
+    if (!patients.length) {
+      return res.status(404).json({ success: false, message: "Patient not found" });
+    }
+
+    res.json({ success: true, data: patients });
+  } catch (error) {
+    console.error("Error in getFilteredPatients:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
