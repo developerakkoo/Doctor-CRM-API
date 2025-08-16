@@ -989,3 +989,27 @@ export const getPatientsStats = async (req, res) => {
   }
 };
 
+export const getWeeklyPatientCount = async (req, res) => {
+  try {
+    const doctorId = req.doctor.doctorId; // from JWT
+
+    // Get start and end of the current week (Mon-Sun)
+    const startOfWeek = moment().startOf('week').toDate();
+    const endOfWeek = moment().endOf('week').toDate();
+
+    const count = await Patient.countDocuments({
+      createdBy: doctorId, // ensure patient was added by this doctor
+      createdAt: { $gte: startOfWeek, $lte: endOfWeek }
+    });
+
+    res.status(200).json({
+      message: 'Weekly patient count fetched successfully',
+      doctorId,
+      week: { start: startOfWeek, end: endOfWeek },
+      count
+    });
+  } catch (error) {
+    console.error('Error fetching weekly patient count:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
