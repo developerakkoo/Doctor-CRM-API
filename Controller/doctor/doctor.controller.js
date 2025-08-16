@@ -913,8 +913,8 @@ export const getRecentPatientsForDoctor = async (req, res) => {
 
     const recentPatients = await Patient.find({ doctorId: req.doctor._id })
       .sort({ createdAt: -1 })
-      .limit(5) // show only last 5 patients
-      .select("patientId firstName lastName email phone createdAt");
+      .limit(5) // last 5 patients
+      .select("patientId firstName lastName email phone createdAt initialStatus priority source");
 
     res.status(200).json({
       success: true,
