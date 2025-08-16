@@ -23,7 +23,7 @@ router.post('/login', loginPatient);
 
 // Profile
 router.get('/profile', verifyPatient, getPatientProfile);
-router.put('/profile', verifyPatient, updatePatientProfile);
+router.put('/profile/update', verifyPatient, updatePatientProfile);
 
 
 // Reports and prescriptions

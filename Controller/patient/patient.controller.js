@@ -158,25 +158,31 @@ export const getPatientProfile = async (req, res) => {
 };
 
 // Update logged-in patient profile
+// PUT /api/patient/profile/update
 export const updatePatientProfile = async (req, res) => {
   try {
-    const { phone, address, medicalHistory, allergies, currentMedications } = req.body;
+    const patientId = req.patient.patientId;
 
-    const updated = await Patient.findOneAndUpdate(
-      { patientId: req.patient.patientId },
-      {
-        ...(phone && { phone }),
-        ...(address && { address }),
-        ...(medicalHistory && { medicalHistory }),
-        ...(allergies && { allergies }),
-        ...(currentMedications && { currentMedications }),
-      },
+    // remove fields that should never be updated manually
+    const disallowedFields = ['_id', 'patientId', 'password', 'createdAt', 'updatedAt'];
+    const updateData = { ...req.body };
+
+    disallowedFields.forEach(field => delete updateData[field]);
+
+    const updatedPatient = await Patient.findOneAndUpdate(
+      { patientId },
+      { $set: updateData },
       { new: true, runValidators: true }
     ).select('-password');
 
-    if (!updated) return res.status(404).json({ message: 'Patient not found' });
+    if (!updatedPatient) {
+      return res.status(404).json({ message: 'Patient not found' });
+    }
 
-    res.status(200).json({ message: 'Profile updated successfully', patient: updated });
+    res.status(200).json({
+      message: 'Profile updated successfully',
+      patient: updatedPatient
+    });
 
   } catch (error) {
     console.error('Profile update error:', error);
