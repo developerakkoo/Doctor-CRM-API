@@ -66,6 +66,7 @@ router.get("/appointments/filter",verifyAccess(['doctor']), getFilteredAppointme
 //  /api/doctors/recent-patients
 router.get('/recent-patients', verifyAccess(['doctor']), getRecentPatientsForDoctor);
 
+router.get('/stats', verifyAccess(['doctor']), getPatientsStats);
 // routes/patientRoutes.js
 
 
