@@ -1049,3 +1049,112 @@ export const updatePatientByDoctor = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+export const getPatientOverviewStats = async (req, res) => {
+  try {
+    const doctorId = req.doctor?.doctorId; // from JWT after login
+
+    if (!doctorId) {
+      return res.status(403).json({ success: false, message: "Unauthorized" });
+    }
+
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+    // Count current month patients
+    const currentMonthCount = await Patient.countDocuments({
+      doctorId,
+      createdAt: { $gte: currentMonthStart }
+    });
+
+    // Count last month patients
+    const lastMonthCount = await Patient.countDocuments({
+      doctorId,
+      createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd }
+    });
+
+    // Calculate % change
+    let percentageChange = 0;
+    if (lastMonthCount > 0) {
+      percentageChange = ((currentMonthCount - lastMonthCount) / lastMonthCount) * 100;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalPatients: currentMonthCount,
+        percentageChange: Number(percentageChange.toFixed(2)),
+        text: `${percentageChange >= 0 ? "+" : ""}${percentageChange.toFixed(2)}% from last month`
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching patient stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
+
+export const getPatientWeeklyStats = async (req, res) => {
+  try {
+    const doctorId = req.doctor?.doctorId; // attached in middleware
+
+    if (!doctorId) {
+      return res.status(403).json({ success: false, message: "Unauthorized" });
+    }
+
+    const now = new Date();
+
+    // Current week start (Sunday)
+    const currentWeekStart = new Date(now);
+    currentWeekStart.setDate(now.getDate() - now.getDay()); 
+    currentWeekStart.setHours(0, 0, 0, 0);
+
+    // Last week range
+    const lastWeekStart = new Date(currentWeekStart);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+
+    const lastWeekEnd = new Date(currentWeekStart);
+    lastWeekEnd.setDate(lastWeekEnd.getDate() - 1);
+
+    // Count patients this week
+    const currentWeekCount = await Patient.countDocuments({
+      doctorId,
+      createdAt: { $gte: currentWeekStart }
+    });
+
+    // Count patients last week
+    const lastWeekCount = await Patient.countDocuments({
+      doctorId,
+      createdAt: { $gte: lastWeekStart, $lte: lastWeekEnd }
+    });
+
+    // Calculate percentage change
+    let weeklyChange = 0;
+    if (lastWeekCount > 0) {
+      weeklyChange = ((currentWeekCount - lastWeekCount) / lastWeekCount) * 100;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        newPatients: currentWeekCount,
+        percentageChange: Number(weeklyChange.toFixed(2)),
+        text: `${weeklyChange >= 0 ? "+" : ""}${weeklyChange.toFixed(2)}% vs last week`
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching weekly patient stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
