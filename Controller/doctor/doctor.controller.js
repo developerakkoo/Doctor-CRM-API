@@ -253,13 +253,13 @@ export const loginDoctor = async (req, res) => {
     // ✅ Compare entered password with stored hash
     const isMatch = await bcrypt.compare(password, doctor.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid password" });
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
     // ✅ Generate JWT Token
     const token = jwt.sign(
       { doctorId: doctor._id, role: "doctor" },
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET, 
       { expiresIn: "1h" }
     );
 
@@ -373,7 +373,7 @@ export const requestPasswordReset = async (req, res) => {
 
 export const getDoctorById = async (req, res) => {
   const { id } = req.params;
-  console.log("Received request to get doctor by ID:", id);
+  // console.log("Received request to get doctor by ID:", id);
 
   try {
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -419,9 +419,9 @@ export const resetDoctorPassword = async (req, res) => {
     }
 
     // 🔍 Debug logs
-    console.log("Stored OTP:", doctor.resetOtp);
-    console.log("Received OTP:", otp);
-    console.log("Expiry:", doctor.resetOtpExpiry, "Now:", Date.now());
+    // console.log("Stored OTP:", doctor.resetOtp);
+    // console.log("Received OTP:", otp);
+    // console.log("Expiry:", doctor.resetOtpExpiry, "Now:", Date.now());
 
     // ✅ Check OTP with string conversion
     if (
@@ -666,9 +666,9 @@ export const streamDoctorVideo = async (req, res) => {
     const doctor = req.doctor;
     if (!doctor) return res.status(401).json({ message: 'Doctor not authenticated' });
 
-    console.log("Doctor ID:", doctor._id);
-    console.log("Doctor Videos:", doctor.videos.map(v => v._id.toString()));
-    console.log("Requested Video ID:", videoId);
+    // console.log("Doctor ID:", doctor._id);
+    // console.log("Doctor Videos:", doctor.videos.map(v => v._id.toString()));
+    // console.log("Requested Video ID:", videoId);
 
     const video = doctor.videos.find(v => v._id.toString() === videoId);
     if (!video) return res.status(404).json({ message: 'Video not found' });

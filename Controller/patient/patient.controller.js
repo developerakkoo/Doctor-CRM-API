@@ -212,12 +212,12 @@ export const getReportsByPatient = async (req, res) => {
 export const addReport = async (req, res) => {
   try {
     const { patientId, title, findings, date } = req.body;
-    console.log("Incoming report body:", req.body);
+    // console.log("Incoming report body:", req.body);
 
     const patient = await Patient.findOne({ patientId });
     if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
-    console.log("Found patient:", patient.fullName);
+    // console.log("Found patient:", patient.fullName);
 
     const pdfUrl = await generateReportPDF({
       title,
@@ -604,14 +604,14 @@ export const getFilteredPatients = async (req, res) => {
     }
 
     const filter = { $and: andConditions };
-    console.log("🔎 MongoDB filter:", JSON.stringify(filter, null, 2));
+    // console.log("🔎 MongoDB filter:", JSON.stringify(filter, null, 2));
 
     const patients = await Patient.find(filter)
       .sort({ createdAt: -1 })
       .skip((parseInt(page) - 1) * parseInt(limit))
       .limit(parseInt(limit));
 
-    console.log("🩺 Patients found:", patients.length);
+    // console.log("🩺 Patients found:", patients.length);
 
     if (!patients.length) {
       return res.status(404).json({ success: false, message: "Patient not found" });
