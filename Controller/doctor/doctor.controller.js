@@ -20,13 +20,14 @@ import moment from 'moment';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
+import nodemailer from "nodemailer";
 import sendEmail from '../../utils/sendEmail.js';
 import Counter from '../../Modals/patient/counter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
+const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;  
 const JWT_SECRET = process.env.JWT_SECRET || 'fallbackSecret';
 
 
@@ -88,63 +89,39 @@ export const getAllDoctors = async (req, res) => {
   }
 };
 
-export const addDoctor = async (req, res) => {
-  const {
-    name,
-    email,
-    password,
-    specialty,
-    yearsOfExperience,
-    phone,
-    address,
-    dob,
-    age,
-    location,
-    locationName
-  } = req.body;
 
+export const addDoctor = async (req, res) => {
   try {
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required' });
-    }
+    const { name, email, password, specialty, yearsOfExperience, phone, address, dob, age, locationName } = req.body;
+
+    if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
 
     const existingDoctor = await Doctor.findOne({ email });
-    if (existingDoctor) {
-      return res.status(400).json({ message: 'Doctor with this email already exists' });
-    }
+    if (existingDoctor) return res.status(400).json({ message: 'Doctor with this email already exists' });
 
-    const profile = req.file ? req.file.filename : null;
-
-    let geoLocation = location;
+    let geoLocation = undefined;
     if (locationName) {
       const coordinates = await getCoordinates(locationName);
-      if (!coordinates) {
-        return res.status(400).json({ message: 'Invalid location name provided' });
-      }
-
-      geoLocation = {
-        type: 'Point',
-        coordinates: [coordinates.longitude, coordinates.latitude],
-        locationName
-      };
+      if (!coordinates) return res.status(400).json({ message: 'Invalid location name' });
+      geoLocation = { type: 'Point', coordinates: [coordinates.longitude, coordinates.latitude], locationName };
     }
 
     const newDoctor = new Doctor({
       name,
       email,
-      password: password.trim(), // Pre-save hook will hash it
+      password,      // ✅ Let pre-save hook hash it
       specialty,
       yearsOfExperience,
       phone,
       address,
       dob,
       age,
-      location: geoLocation,
-      profile
+      location: geoLocation
     });
 
     await newDoctor.save();
 
+    // Generate JWT
     const token = jwt.sign(
       { doctorId: newDoctor._id, role: newDoctor.role },
       process.env.JWT_ACCESS_SECRET,
@@ -154,11 +131,7 @@ export const addDoctor = async (req, res) => {
     return res.status(201).json({
       message: 'Doctor registered successfully',
       token,
-      doctor: {
-        id: newDoctor._id,
-        name: newDoctor.name,
-        email: newDoctor.email
-      }
+      doctor: { id: newDoctor._id, name: newDoctor.name, email: newDoctor.email, role: newDoctor.role }
     });
 
   } catch (error) {
@@ -166,6 +139,7 @@ export const addDoctor = async (req, res) => {
     return res.status(500).json({ message: 'Error adding doctor', error: error.message });
   }
 };
+
 
 
 export const updateDoctor = async (req, res) => {
@@ -261,43 +235,46 @@ export const uploadDegreePhoto = async (req, res) => {
 };
 
 export const loginDoctor = async (req, res) => {
+  const { email, password } = req.body;
+
   try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required' });
-    }
-
-    console.log("Login request email:", email);
-    console.log("Login request password:", password);
-
-    const doctor = await Doctor.findOne({ email: email.trim() }).select('+password');
-
+    const doctor = await Doctor.findOne({ email });
     if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
+      return res.status(404).json({ message: "Doctor not found" });
     }
 
-    console.log("Doctor found. Stored hash:", doctor.password);
-
-    const isPasswordValid = await bcrypt.compare(password.trim(), doctor.password);
-
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: 'Invalid password' });
+    // ✅ Ensure doctor has a password set
+    if (!doctor.password) {
+      return res.status(400).json({
+        message: "Doctor has no password set. Please reset your password.",
+      });
     }
 
+    // ✅ Compare entered password with stored hash
+    const isMatch = await bcrypt.compare(password, doctor.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid password" });
+    }
+
+    // ✅ Generate JWT Token
     const token = jwt.sign(
-      {
-        doctorId: doctor._id, role: doctor.role
-      },
-      process.env.JWT_ACCESS_SECRET,
-      { expiresIn: '1d' }
+      { doctorId: doctor._id, role: "doctor" },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
     );
 
-    return res.status(200).json({ message: 'Login successful', token });
-
+    res.status(200).json({
+      message: "Login successful",
+      token,
+      doctor: {
+        id: doctor._id,
+        name: doctor.name,
+        email: doctor.email,
+      },
+    });
   } catch (error) {
-    console.error('Login error:', error.message);
-    return res.status(500).json({ message: 'Server error' });
+    console.error("Error in loginDoctor:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
@@ -359,41 +336,37 @@ export const confirmChangePassword = async (req, res) => {
 };
 
 
-
 export const requestPasswordReset = async (req, res) => {
   const { email } = req.body;
 
   try {
     const doctor = await Doctor.findOne({ email });
     if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
+      return res.status(404).json({ message: "Doctor not found" });
     }
 
-    // Generate token (plain)
-    const resetToken = crypto.randomBytes(32).toString('hex');
+    // ✅ Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Hash token before saving to DB
-    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    // ✅ Save OTP in DB
+    doctor.resetOtp = otp;
+    doctor.resetOtpExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
 
-    doctor.resetPasswordToken = hashedToken;
-    doctor.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 min
     await doctor.save();
 
-    // Construct link with plain token
-    const resetLink = `http://localhost:5173/reset-password?token=${resetToken}`;
-
-    // Send email
+    // ✅ Send OTP via Email
     await sendEmail({
-      to: doctor.email,
-      subject: 'Password Reset Request',
-      text: `You requested a password reset. Use the link below within 15 minutes:\n\n${resetLink}`,
+      to: email,
+      subject: "Doctor CRM - Password Reset OTP",
+      text: `Your OTP for password reset is: ${otp}. It is valid for 15 minutes.`
     });
 
-    res.status(200).json({ message: 'Password reset link sent to email' });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    res.status(200).json({
+      message: "Password reset OTP sent to your email",
+    });
+  } catch (error) {
+    console.error("Error in requestPasswordReset:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
@@ -435,46 +408,47 @@ export const getDoctorById = async (req, res) => {
   }
 };
 
+
 export const resetDoctorPassword = async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+
   try {
-    // Get token from params, query, or body
-    const token = req.params.token || req.query.token || req.body.token;
-    const { newPassword } = req.body;
-
-    if (!token) {
-      return res.status(400).json({ message: 'Token is required' });
-    }
-
-    if (!newPassword) {
-      return res.status(400).json({ message: 'New password is required' });
-    }
-
-    // Hash the token to match the stored version
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-
-    // Find doctor with matching hashed token and valid expiry
-    const doctor = await Doctor.findOne({
-      resetPasswordToken: hashedToken,
-      resetPasswordExpires: { $gt: Date.now() }
-    }).select('+password');
-
+    const doctor = await Doctor.findOne({ email });
     if (!doctor) {
-      return res.status(400).json({ message: 'Invalid or expired token' });
+      return res.status(404).json({ message: "Doctor not found" });
     }
 
-    // Update password
-    doctor.password = newPassword; // pre-save hook will hash it
-    doctor.resetPasswordToken = undefined;
-    doctor.resetPasswordExpires = undefined;
+    // 🔍 Debug logs
+    console.log("Stored OTP:", doctor.resetOtp);
+    console.log("Received OTP:", otp);
+    console.log("Expiry:", doctor.resetOtpExpiry, "Now:", Date.now());
+
+    // ✅ Check OTP with string conversion
+    if (
+      String(doctor.resetOtp) !== String(otp) ||
+      !doctor.resetOtpExpiry ||
+      doctor.resetOtpExpiry < Date.now()
+    ) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    // ✅ Update password (hook will hash)
+    doctor.password = newPassword;
+
+    // ✅ Clear reset fields
+    doctor.resetOtp = undefined;
+    doctor.resetOtpExpiry = undefined;
 
     await doctor.save();
 
-    return res.status(200).json({ message: 'Password has been reset successfully' });
+    res.status(200).json({ message: "Password reset successfully" });
   } catch (error) {
-    console.error('Error resetting password:', error);
-    return res.status(500).json({ message: 'Server error' });
+    console.error("Error in resetDoctorPassword:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+
 
 
 export const logoutDoctor = async (req, res) => {
@@ -1112,7 +1086,7 @@ export const getPatientWeeklyStats = async (req, res) => {
 
     // Current week start (Sunday)
     const currentWeekStart = new Date(now);
-    currentWeekStart.setDate(now.getDate() - now.getDay()); 
+    currentWeekStart.setDate(now.getDate() - now.getDay());
     currentWeekStart.setHours(0, 0, 0, 0);
 
     // Last week range

@@ -16,7 +16,7 @@ import uploadVideoMiddleware  from '../../middlewares/videoUpload.middleware.js'
 import { verifyDoctorToken } from '../../middlewares/authDoctor.middleware.js';
 
 const router = express.Router();
-  
+
 // ✅ Public routes
 router.post('/register', upload.single('profile'), addDoctor);
 router.post('/login', loginDoctor);
@@ -37,7 +37,7 @@ router.post('/change-password-confirm', confirmChangePassword);
 
 router.post('/reset-password-request', requestPasswordReset);
 
-router.post('/reset-password/:token', resetDoctorPassword);
+router.post('/reset-password', resetDoctorPassword);
 
 router.post('/logout', verifyAccess(['doctor']), logoutDoctor);
 

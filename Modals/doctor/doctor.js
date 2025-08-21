@@ -18,7 +18,7 @@ const doctorSchema = new mongoose.Schema({
   password: {
     type: String,
     required: true,
-    select: false // Exclude by default, fetch manually when needed
+    select: true
   },
   email: {
     type: String,
@@ -62,18 +62,18 @@ const doctorSchema = new mongoose.Schema({
     }
   },
   videos: [
-  {
-    title: String,
-    videoUrl: String,
-    context: {
-      type: String,
-      enum: ['prescription', 'bill', 'report'],
-      required: true
-    },
-    uploadedAt: {
-      type: Date,
-      default: Date.now
-    }
+    {
+      title: String,
+      videoUrl: String,
+      context: {
+        type: String,
+        enum: ['prescription', 'bill', 'report'],
+        required: true
+      },
+      uploadedAt: {
+        type: Date,
+        default: Date.now
+      }
     }
   ],
   resetPasswordToken: {
@@ -81,8 +81,12 @@ const doctorSchema = new mongoose.Schema({
   },
   resetPasswordExpires: {
     type: Date
-  }
-  
+  },
+  resetOtp: String,
+  resetOtpExpiry: Date,
+  resetPasswordOtp: { type: String },
+  resetPasswordExpires: { type: Date }
+
 
 });
 
