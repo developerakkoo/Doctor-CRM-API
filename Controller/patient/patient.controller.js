@@ -623,3 +623,26 @@ export const getFilteredPatients = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+export const getDoctorsBySpecialty = async (req, res) => {
+  try {
+    const { specialty } = req.query;  // 👈 query param
+
+    if (!specialty) {
+      return res.status(400).json({ message: "Specialty is required in query" });
+    }
+
+    // Case-insensitive search
+    const doctors = await Doctor.find({
+      specialty: { $regex: new RegExp(specialty, "i") }
+    });
+
+    if (doctors.length === 0) {
+      return res.status(404).json({ message: "No doctors found for this specialty" });
+    }
+
+    res.status(200).json(doctors);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching doctors", error: error.message });
+  }
+};

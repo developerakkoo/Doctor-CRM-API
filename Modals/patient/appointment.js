@@ -9,6 +9,32 @@ const appointmentSchema = new mongoose.Schema({
   patientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Patient',
+    required: false
+  },
+
+  // ✅ Patient details snapshot at time of booking
+  name: {
+    type: String,
+    required: true
+  },
+  email: {
+    type: String,
+    required: true
+  },
+  phone: {
+    type: String,
+    required: true
+  },
+
+  // ✅ Appointment details
+  appointmentType: {
+    type: String,
+    enum: ['Consultation', 'Follow-up', 'Treatment', 'Emergency'],
+    required: true
+  },
+  duration: {
+    type: String,
+    enum: ['30 minutes', '45 minutes', '60 minutes', '90 minutes', '120 minutes'],
     required: true
   },
   appointmentDate: {
@@ -18,6 +44,10 @@ const appointmentSchema = new mongoose.Schema({
   appointmentTime: {
     type: String,
     required: true
+  },
+  location: {
+    type: String,
+    default: 'Clinic'
   },
   status: {
     type: String,

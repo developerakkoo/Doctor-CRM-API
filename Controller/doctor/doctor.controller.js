@@ -739,44 +739,58 @@ export const getTodaysAppointments = async (req, res) => {
   }
 };
 
-export const createAppointment = async (req, res) => {
-  try {
-    const { patientId, doctorId, appointmentDate, appointmentTime, notes } = req.body;
 
-    // ✅ Validation for required fields
-    if (!patientId || !doctorId || !appointmentDate || !appointmentTime) {
-      return res.status(400).json({ message: 'All required fields must be filled' });
-    }
+    export const createAppointment = async (req, res) => {
+      try {
+        const doctorId = req.doctor?.doctorId; // ✅ from verifyAccess middleware for doctors
+        if (!doctorId) {
+          return res.status(401).json({ message: 'Unauthorized: Doctor not found in token' });
+        }
 
-    // ✅ Confirm patient and doctor exist
-    const patient = await Patient.findById(patientId);
-    const doctor = await Doctor.findById(doctorId);
+        const {
+          name,
+          email,
+          phone,
+          appointmentType,
+          duration,
+          appointmentDate,
+          appointmentTime,
+          location,
+          notes
+        } = req.body;
 
-    if (!patient || !doctor) {
-      return res.status(404).json({ message: 'Doctor or patient not found' });
-    }
+        // ✅ Validate required fields
+        if (!name || !email || !phone || !appointmentType || !duration || !appointmentDate || !appointmentTime) {
+          return res.status(400).json({ message: 'All required fields must be provided' });
+        }
 
-    // ✅ Convert string date to JS Date object
-    const newAppointment = new Appointment({
-      patientId,
-      doctorId,
-      appointmentDate: new Date(appointmentDate),
-      appointmentTime,
-      status: 'Scheduled',
-      notes: notes || ''
-    });
+        // ✅ Create appointment
+        const newAppointment = new Appointment({
+          doctorId,
+          name,
+          email,
+          phone,
+          appointmentType,
+          duration,
+          appointmentDate,
+          appointmentTime,
+          location,
+          notes
+        });
 
-    await newAppointment.save();
+        await newAppointment.save();
 
-    res.status(201).json({
-      message: 'Appointment created successfully',
-      appointment: newAppointment
-    });
-  } catch (error) {
-    console.error('Create appointment error:', error);
-    res.status(500).json({ message: 'Internal Server Error', error });
-  }
-};
+        res.status(201).json({
+          message: 'Appointment created successfully by doctor',
+          appointment: newAppointment
+        });
+
+      } catch (error) {
+        console.error('Error creating doctor appointment:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+      }
+    };
+
 
 export const getUpcomingAppointmentsForDoctor = async (req, res) => {
   try {
