@@ -71,7 +71,6 @@ router.get('/recent-patients', verifyAccess(['doctor']), getRecentPatientsForDoc
 router.get('/stats', verifyAccess(['doctor']), getPatientsStats);
 // routes/patientRoutes.js
 
-// routes/
 // routes/patient.routes.js
 router.get('/count/week', verifyAccess(['doctor']) , getWeeklyPatientCount);
 

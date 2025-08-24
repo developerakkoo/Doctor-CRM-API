@@ -794,7 +794,7 @@ export const getTodaysAppointments = async (req, res) => {
 
 export const getUpcomingAppointmentsForDoctor = async (req, res) => {
   try {
-    const doctorIdFromJWT = req.doctor?.id || req.user?.doctorId || req.user?.id;
+    const doctorIdFromJWT = req.doctor?.doctorId || req.doctor?._id;
 
     if (!doctorIdFromJWT) {
       return res.status(401).json({ success: false, message: "Unauthorized access" });
