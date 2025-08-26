@@ -45,16 +45,20 @@ export const createPatient = async (req, res) => {
     const existingPhone = await Patient.findOne({ phone });
     if (existingPhone) return res.status(400).json({ message: "Phone already in use" });
 
-    // ✅ Generate patientId
-    const today = new Date();
-    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
-    const seq = Math.floor(1000 + Math.random() * 9000); // 4-digit random
-    const generatedPatientId = `PAT${dateStr}${seq}`;
+    // ✅ Shorter patientId: PAT + 4-digit number
+    let generatedPatientId;
+    let isUnique = false;
 
-    // ✅ Normalize status
+    while (!isUnique) {
+      const rand = Math.floor(1000 + Math.random() * 9000); // 4-digit random
+      generatedPatientId = `PAT${rand}`;
+      const existingId = await Patient.findOne({ patientId: generatedPatientId });
+      if (!existingId) isUnique = true;
+    }
+
     const normalizedStatus = initialStatus
       ? initialStatus.trim().toLowerCase()
-      : "contact"; // default
+      : "contact";
 
     const newPatient = new Patient({
       firstName,
@@ -67,7 +71,7 @@ export const createPatient = async (req, res) => {
       source,
       priority,
       initialStatus: normalizedStatus,
-      status: normalizedStatus, // ✅ Always set status from initialStatus
+      status: normalizedStatus,
       referredBy,
       initialNotes,
       password,
@@ -91,7 +95,7 @@ export const createPatient = async (req, res) => {
         insuranceProvider: newPatient.insuranceProvider,
         source: newPatient.source,
         priority: newPatient.priority,
-        status: newPatient.status // ✅ Return unified status
+        status: newPatient.status
       }
     });
   } catch (err) {
@@ -99,6 +103,7 @@ export const createPatient = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 // Login Patient

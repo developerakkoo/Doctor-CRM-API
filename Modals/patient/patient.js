@@ -112,5 +112,17 @@ patientSchema.pre('save', function(next) {
   next();
 });
 
+
+patientSchema.pre('save', function(next) {
+  if (!this.patientId) {
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0,10).replace(/-/g, '');
+    const seq = Math.floor(1000 + Math.random() * 9000);
+    this.patientId = `PAT${dateStr}${seq}`;
+  }
+  next();
+});
+
+
 const Patient = mongoose.model('Patient', patientSchema);
 export default Patient;
