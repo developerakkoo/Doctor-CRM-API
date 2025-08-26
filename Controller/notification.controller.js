@@ -1,5 +1,5 @@
 import Notification from '../Modals/Notification.js';
-import Doctor from '../Modals/doctor/Doctor.js';
+import Doctor from '../Modals/doctor/doctor.js';
 import Patient from '../Modals/patient/patient.js';
 import MedicalOwner from '../Modals/medicalOwner/medicalOwner.js';
 

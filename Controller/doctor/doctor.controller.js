@@ -3,9 +3,10 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
 
-import Doctor from '../../Modals/doctor/Doctor.js';
+import Doctor from '../../Modals/doctor/doctor.js';
 import fs from 'fs';
 import path from 'path';
+
 
 import crypto from 'crypto';
 import axios from 'axios';
@@ -92,36 +93,61 @@ export const getAllDoctors = async (req, res) => {
 
 export const addDoctor = async (req, res) => {
   try {
-    const { name, email, password, specialty, yearsOfExperience, phone, address, dob, age, locationName } = req.body;
-
-    if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
-
-    const existingDoctor = await Doctor.findOne({ email });
-    if (existingDoctor) return res.status(400).json({ message: 'Doctor with this email already exists' });
-
-    let geoLocation = undefined;
-    if (locationName) {
-      const coordinates = await getCoordinates(locationName);
-      if (!coordinates) return res.status(400).json({ message: 'Invalid location name' });
-      geoLocation = { type: 'Point', coordinates: [coordinates.longitude, coordinates.latitude], locationName };
-    }
-
-    const newDoctor = new Doctor({
+    const {
       name,
       email,
-      password,      // ✅ Let pre-save hook hash it
+      password,
       specialty,
       yearsOfExperience,
       phone,
       address,
       dob,
       age,
+      locationName,
+      title,
+      professionalBio
+    } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    const existingDoctor = await Doctor.findOne({ email });
+    if (existingDoctor) {
+      return res.status(400).json({ message: 'Doctor with this email already exists' });
+    }
+
+    let geoLocation;
+    if (locationName) {
+      const coordinates = await getCoordinates(locationName);
+      if (!coordinates) {
+        return res.status(400).json({ message: 'Invalid location name' });
+      }
+
+      geoLocation = {
+        type: 'Point',
+        coordinates: [coordinates.longitude, coordinates.latitude],
+        locationName
+      };
+    }
+
+    const newDoctor = new Doctor({
+      name,
+      email,
+      password,
+      specialty,
+      yearsOfExperience,
+      phone,
+      address,
+      dob,
+      age,
+      title,
+      professionalBio,
       location: geoLocation
     });
 
     await newDoctor.save();
 
-    // Generate JWT
     const token = jwt.sign(
       { doctorId: newDoctor._id, role: newDoctor.role },
       process.env.JWT_ACCESS_SECRET,
@@ -131,7 +157,15 @@ export const addDoctor = async (req, res) => {
     return res.status(201).json({
       message: 'Doctor registered successfully',
       token,
-      doctor: { id: newDoctor._id, name: newDoctor.name, email: newDoctor.email, role: newDoctor.role }
+      doctor: {
+        id: newDoctor._id,
+        name: newDoctor.name,
+        email: newDoctor.email,
+        role: newDoctor.role,
+        title: newDoctor.title,
+        professionalBio: newDoctor.professionalBio,
+        licenseNumber: newDoctor.licenseNumber // ✅ Ensures it's in response
+      }
     });
 
   } catch (error) {
@@ -139,6 +173,7 @@ export const addDoctor = async (req, res) => {
     return res.status(500).json({ message: 'Error adding doctor', error: error.message });
   }
 };
+
 
 
 

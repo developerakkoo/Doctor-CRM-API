@@ -7,6 +7,11 @@ const doctorSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  title: {
+    type: String,
+    enum: ['Mr.', 'Mrs.', 'Dr.'],
+    default: undefined // Optional
+  },
   specialty: {
     type: String,
     required: true
@@ -14,6 +19,14 @@ const doctorSchema = new mongoose.Schema({
   yearsOfExperience: {
     type: Number,
     required: true
+  },
+  licenseNumber: {
+    type: String,
+    unique: true
+  },
+  professionalBio: {
+    type: String,
+    default: '' // Optional field
   },
   password: {
     type: String,
@@ -86,8 +99,6 @@ const doctorSchema = new mongoose.Schema({
   resetOtpExpiry: Date,
   resetPasswordOtp: { type: String },
   resetPasswordExpires: { type: Date }
-
-
 });
 
 // ✅ Pre-save hook to hash password if modified
@@ -96,11 +107,19 @@ doctorSchema.pre('save', async function (next) {
 
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
-
-  // Optional debug
-  // console.log('Password hashed before save');
   next();
 });
+
+doctorSchema.pre('save', async function (next) {
+  if (!this.licenseNumber) {
+    const randomPart = Math.floor(100000 + Math.random() * 900000); // 6-digit number
+    const timestampPart = Date.now().toString().slice(-4);          // last 4 digits of timestamp
+    this.licenseNumber = `LIC-${randomPart}${timestampPart}`;
+  }
+  next();
+});
+
+
 
 // Geospatial index
 doctorSchema.index({ location: '2dsphere' });

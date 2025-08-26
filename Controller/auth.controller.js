@@ -1,4 +1,4 @@
-import Doctor from '../Modals/doctor/Doctor.js';
+import Doctor from '../Modals/doctor/doctor.js';
 import RefreshToken from '../Modals/RefreshToken.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';

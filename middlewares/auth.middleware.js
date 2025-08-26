@@ -2,7 +2,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import jwt from 'jsonwebtoken';
-import Doctor from '../Modals/doctor/Doctor.js';
+import Doctor from '../Modals/doctor/doctor.js';
+
 import Patient from '../Modals/patient/patient.js';
 import mongoose from 'mongoose';
 const JWT_SECRET = process.env.JWT_SECRET;

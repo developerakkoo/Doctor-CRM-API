@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import Doctor from '../Modals/doctor/Doctor.js';
+import Doctor from '../Modals/doctor/doctor.js';
 
 export const verifyDoctorToken = async (req, res, next) => {
   try {

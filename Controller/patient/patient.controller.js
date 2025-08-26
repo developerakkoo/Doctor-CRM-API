@@ -11,7 +11,7 @@ import { generateBillPDF } from '../../utils/generateBillPDF.js';
 import Appointment from '../../Modals/patient/appointment.js';
 import mongoose from 'mongoose';
 import Counter from '../../Modals/patient/counter.js'; // adjust path accordingly
-import Doctor from '../../Modals/doctor/Doctor.js';
+import Doctor from '../../Modals/doctor/doctor.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
