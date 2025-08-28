@@ -9,7 +9,7 @@ import { authorize, authorizeAdminOnly } from '../../middlewares/role.middleware
 
 
 import { resetDoctorPassword , getDoctorPatients , resetPassword,requestPasswordReset , getDoctorVideos } from '../../Controller/doctor/doctor.controller.js';
-import { getPatientDetails , getPatientCounts , createAppointment, uploadDoctorVideo ,  getWeeklyPatientCount , updatePatientByDoctor , getPatientOverviewStats , getPatientWeeklyStats ,
+import { getPatientDetails , getPatientCounts , createAppointment, uploadDoctorVideo ,  getWeeklyPatientCount , updatePatientByDoctor , getPatientOverviewStats , getPatientWeeklyStats , editAppointment ,
         streamDoctorVideo , getTodaysAppointments , getUpcomingAppointmentsForDoctor , getFilteredAppointments , getRecentPatientsForDoctor , getPatientsStats } from "../../Controller/doctor/doctor.controller.js";
 
 import uploadVideoMiddleware  from '../../middlewares/videoUpload.middleware.js';
@@ -60,6 +60,9 @@ router.get('/videos/stream/:videoId', verifyAccess(['doctor']) ,streamDoctorVide
 router.post('/appointments/create', verifyAccess(['doctor']), createAppointment);
 
 router.get('/appointments/today', verifyAccess(['doctor']), getTodaysAppointments);
+
+router.patch('/appointments/edit/:id/', verifyAccess(['doctor']), editAppointment);
+
 
 router.get("/upcoming-appointments", verifyAccess(['doctor']), getUpcomingAppointmentsForDoctor);
 

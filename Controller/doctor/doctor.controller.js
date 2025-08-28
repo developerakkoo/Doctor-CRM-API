@@ -774,57 +774,136 @@ export const getTodaysAppointments = async (req, res) => {
   }
 };
 
+export const createAppointment = async (req, res) => {
+  try {
+    const doctorId = req.doctor?.doctorId; // ✅ from verifyAccess middleware for doctors
+    if (!doctorId) {
+      return res.status(401).json({ message: 'Unauthorized: Doctor not found in token' });
+    }
 
-    export const createAppointment = async (req, res) => {
-      try {
-        const doctorId = req.doctor?.doctorId; // ✅ from verifyAccess middleware for doctors
-        if (!doctorId) {
-          return res.status(401).json({ message: 'Unauthorized: Doctor not found in token' });
+    const {
+      name,
+      email,
+      phone,
+      appointmentType,
+      duration,
+      appointmentDate,
+      appointmentTime,
+      location,
+      notes
+    } = req.body;
+
+    // ✅ Validate required fields
+    if (!name || !email || !phone || !appointmentType || !duration || !appointmentDate || !appointmentTime) {
+      return res.status(400).json({ message: 'All required fields must be provided' });
+    }
+
+    // ✅ Step 1: Find patient by email
+    const patient = await Patient.findOne({ email });
+
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient not found with this email' });
+    }
+
+    // ✅ Step 2: Create appointment and link patientId
+    const newAppointment = new Appointment({
+      doctorId,
+      patientId: patient._id,
+      name,
+      email,
+      phone,
+      appointmentType,
+      duration,
+      appointmentDate,
+      appointmentTime,
+      location,
+      notes
+    });
+
+    await newAppointment.save();
+
+    // ✅ Step 3: Push appointment summary into Patient's embedded appointments array
+    await Patient.findByIdAndUpdate(
+      patient._id,
+      {
+        $push: {
+          appointments: {
+            appointmentDate,
+            reason: appointmentType,
+            doctorId,
+            status: 'Scheduled',
+            notes
+          }
         }
-
-        const {
-          name,
-          email,
-          phone,
-          appointmentType,
-          duration,
-          appointmentDate,
-          appointmentTime,
-          location,
-          notes
-        } = req.body;
-
-        // ✅ Validate required fields
-        if (!name || !email || !phone || !appointmentType || !duration || !appointmentDate || !appointmentTime) {
-          return res.status(400).json({ message: 'All required fields must be provided' });
-        }
-
-        // ✅ Create appointment
-        const newAppointment = new Appointment({
-          doctorId,
-          name,
-          email,
-          phone,
-          appointmentType,
-          duration,
-          appointmentDate,
-          appointmentTime,
-          location,
-          notes
-        });
-
-        await newAppointment.save();
-
-        res.status(201).json({
-          message: 'Appointment created successfully by doctor',
-          appointment: newAppointment
-        });
-
-      } catch (error) {
-        console.error('Error creating doctor appointment:', error);
-        res.status(500).json({ message: 'Server error', error: error.message });
       }
-    };
+    );
+
+    res.status(201).json({
+      message: 'Appointment created and linked to patient successfully',
+      appointment: newAppointment
+    });
+
+  } catch (error) {
+    console.error('Error creating doctor appointment:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+
+export const editAppointment = async (req, res) => {
+  try {
+    const doctorId = req.doctor?.doctorId; // from token middleware
+    const appointmentId = req.params.id;
+
+    if (!doctorId) {
+      return res.status(401).json({ message: 'Unauthorized: Doctor not found in token' });
+    }
+
+    const existingAppointment = await Appointment.findById(appointmentId);
+
+    if (!existingAppointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+
+    // Check if this doctor owns the appointment
+    if (existingAppointment.doctorId.toString() !== doctorId) {
+      return res.status(403).json({ message: 'Forbidden: Not your appointment' });
+    }
+
+    // ✅ Fields allowed to be updated
+    const updatableFields = [
+      'name',
+      'email',
+      'phone',
+      'appointmentType',
+      'duration',
+      'appointmentDate',
+      'appointmentTime',
+      'location',
+      'notes'
+    ];
+
+    // Update only fields provided in the request
+    updatableFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        existingAppointment[field] = req.body[field];
+      }
+    });
+
+    await existingAppointment.save();
+
+    res.status(200).json({
+      message: 'Appointment updated successfully',
+      appointment: existingAppointment
+    });
+
+  } catch (error) {
+    console.error('Error updating appointment:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+
 
 
 export const getUpcomingAppointmentsForDoctor = async (req, res) => {
