@@ -923,39 +923,43 @@ export const getUpcomingAppointmentsForDoctor = async (req, res) => {
       return res.status(404).json({ success: false, message: "Doctor not found" });
     }
 
-    // Start of now
+    // Get today's date at midnight
     const now = moment().startOf("day").toDate();
 
-    // Find all patients having appointments with this doctor in future (including today)
+    // Fetch patients who have appointments with this doctor from today onwards
     const patients = await Patient.find({
       "appointments.doctorId": doctor._id,
       "appointments.appointmentDate": { $gte: now }
-    }).populate("appointments.doctorId").populate("userId"); // populate patient user info
+    });
 
-    // Flatten and filter only the upcoming appointments for this doctor
     const upcomingAppointments = [];
+
     patients.forEach(patient => {
       patient.appointments.forEach(appt => {
         if (
-          appt.doctorId &&
-          appt.doctorId._id.toString() === doctor._id.toString() &&
+          appt.doctorId?.toString() === doctor._id.toString() &&
           new Date(appt.appointmentDate) >= now
         ) {
           upcomingAppointments.push({
             patientId: patient._id,
-            patientName: patient.userId?.name || "Unknown",
+            patientName: `${patient.firstName} ${patient.lastName}`,
             appointmentDate: appt.appointmentDate,
-            reason: appt.reason,
+            appointmentTime: appt.appointmentTime, // <-- added time
+            reason: appt.reason || 'N/A',
             status: appt.status,
-            doctorId: appt.doctorId._id,
-            doctorName: appt.doctorId.name
+            doctorId: doctor._id,
+            doctorName: doctor.name || "Unknown"
           });
         }
       });
     });
 
-    // Sort by date ascending
-    upcomingAppointments.sort((a, b) => new Date(a.appointmentDate) - new Date(b.appointmentDate));
+    // Sort by date and time
+    upcomingAppointments.sort((a, b) => {
+      const dateA = new Date(`${a.appointmentDate} ${a.appointmentTime}`);
+      const dateB = new Date(`${b.appointmentDate} ${b.appointmentTime}`);
+      return dateA - dateB;
+    });
 
     res.status(200).json({
       success: true,
@@ -968,6 +972,7 @@ export const getUpcomingAppointmentsForDoctor = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
 
 export const getFilteredAppointments = async (req, res) => {
   try {

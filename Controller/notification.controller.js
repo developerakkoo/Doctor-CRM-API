@@ -30,19 +30,24 @@ export const sendNotification = async (req, res) => {
 // Get all notifications for logged-in user
 export const getNotifications = async (req, res) => {
   try {
-    const userId = req.user?._id || req.doctor?._id || req.patient?._id;
-    const rawRole = req.user?.role || req.doctor?.role || req.patient?.role;
-    const userModel = rawRole
-      ? rawRole.charAt(0).toUpperCase() + rawRole.slice(1).toLowerCase()
-      : null;
+    // Extract user role and ID from middleware-attached object
+    const user = req.doctor || req.patient || req.user; // extend later for medicalOwner/subadmin
+    const userId = user?._id;
+    const role = user?.role;
 
-    if (!userId || !userModel) {
-      return res.status(401).json({ success: false, message: 'Unauthorized: user ID or role missing' });
+    if (!userId || !role) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized: user ID or role missing',
+      });
     }
+
+    // Capitalize first letter for recipientModel matching (e.g. "Doctor", "Patient")
+    const recipientModel = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
 
     const notifications = await Notification.find({
       recipientId: userId,
-      recipientModel: userModel,
+      recipientModel: recipientModel,
     }).sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -51,8 +56,7 @@ export const getNotifications = async (req, res) => {
       count: notifications.length,
       data: notifications,
     });
-    } 
-    catch (err) {
+  } catch (err) {
     res.status(500).json({
       success: false,
       message: 'Failed to get notifications',

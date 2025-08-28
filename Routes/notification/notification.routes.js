@@ -6,8 +6,7 @@ import { verifyAccess } from '../../middlewares/auth.middleware.js'; // Adjust i
 
 const router = express.Router();
 
-router.post('/send', sendNotification); 
-
+router.post('/send',verifyAccess(['doctor', 'patient', 'medicalOwner','subadmin']) ,sendNotification); 
 
 // Pass allowed roles explicitly
 router.get('/', verifyAccess(['doctor', 'patient', 'medicalOwner','subadmin']), getNotifications);
