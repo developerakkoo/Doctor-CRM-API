@@ -1,8 +1,9 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+
 dotenv.config();
 
-const sendEmail = async ({ to, subject, text }) => {
+const sendEmail = async ({ to, subject, text, html }) => {
   if (!to) {
     throw new Error('No recipients defined');
   }
@@ -22,7 +23,8 @@ const sendEmail = async ({ to, subject, text }) => {
     from: `"Doctor CRM" <${process.env.EMAIL_USER}>`,
     to,
     subject,
-    text
+    ...(text && { text }),
+    ...(html && { html })
   };
 
   const info = await transporter.sendMail(mailOptions);

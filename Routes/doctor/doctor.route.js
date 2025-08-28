@@ -10,7 +10,7 @@ import { authorize, authorizeAdminOnly } from '../../middlewares/role.middleware
 
 import { resetDoctorPassword , getDoctorPatients , resetPassword,requestPasswordReset , getDoctorVideos } from '../../Controller/doctor/doctor.controller.js';
 import { getPatientDetails , getPatientCounts , createAppointment, uploadDoctorVideo ,  getWeeklyPatientCount , updatePatientByDoctor , getPatientOverviewStats , getPatientWeeklyStats , editAppointment ,
-        streamDoctorVideo , getTodaysAppointments , getUpcomingAppointmentsForDoctor , getFilteredAppointments , getRecentPatientsForDoctor , getPatientsStats } from "../../Controller/doctor/doctor.controller.js";
+ sendAppointmentEmail,  streamDoctorVideo , getTodaysAppointments , getUpcomingAppointmentsForDoctor , getFilteredAppointments , getRecentPatientsForDoctor , getPatientsStats } from "../../Controller/doctor/doctor.controller.js";
 
 import uploadVideoMiddleware  from '../../middlewares/videoUpload.middleware.js';
 import { verifyDoctorToken } from '../../middlewares/authDoctor.middleware.js';
@@ -68,6 +68,7 @@ router.get("/upcoming-appointments", verifyAccess(['doctor']), getUpcomingAppoin
 
 router.get("/appointments/filter",verifyAccess(['doctor']), getFilteredAppointments);
 
+router.post('/appointments/notify', verifyAccess(['doctor']), sendAppointmentEmail);
 //  /api/doctors/recent-patients
 router.get('/recent-patients', verifyAccess(['doctor']), getRecentPatientsForDoctor);
 

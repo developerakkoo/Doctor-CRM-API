@@ -1265,3 +1265,84 @@ export const getPatientWeeklyStats = async (req, res) => {
     });
   }
 };
+
+export const sendAppointmentEmail = async (req, res) => {
+  try {
+    const doctorId = req.doctor?.doctorId;
+
+    if (!doctorId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: Doctor not found in token' });
+    }
+
+    // ✅ Fetch the latest appointment created by this doctor
+    const latestAppointment = await Appointment.findOne({ doctorId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!latestAppointment) {
+      return res.status(404).json({ success: false, message: 'No appointment found for this doctor' });
+    }
+
+    const patientId = latestAppointment.patientId;
+
+    if (!patientId) {
+      return res.status(400).json({ success: false, message: 'Patient ID missing in appointment' });
+    }
+
+    const [doctor, patient] = await Promise.all([
+      Doctor.findById(doctorId).lean(),
+      Patient.findById(patientId).lean(),
+    ]);
+
+    if (!doctor || !patient) {
+      return res.status(404).json({ success: false, message: 'Doctor or patient not found' });
+    }
+
+    // ✅ Configure transporter
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+    // ✅ Compose email
+    const mailOptions = {
+      from: `"${doctor.name}" <${process.env.EMAIL_USER}>`,
+      to: patient.email,
+      subject: '📅 Appointment Confirmation',
+      html: `
+        <h3>Hello ${patient.firstName},</h3>
+        <p>Your appointment has been confirmed.</p>
+        <ul>
+          <li><strong>Date:</strong> ${new Date(latestAppointment.appointmentDate).toDateString()}</li>
+          <li><strong>Time:</strong> ${latestAppointment.appointmentTime}</li>
+          <li><strong>Doctor:</strong> Dr. ${doctor.name}</li>
+          <li><strong>Location:</strong> ${latestAppointment.location || 'Clinic'}</li>
+        </ul>
+        <p>Please be on time and bring any prior reports if available.</p>
+        <br>
+        <p>Thank you,<br/>Dr. ${doctor.name}</p>
+      `
+    };
+
+    // ✅ Send email
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({
+      success: true,
+      message: 'Appointment email sent to patient successfully',
+      emailSentTo: patient.email,
+      appointmentId: latestAppointment._id
+    });
+
+  } catch (error) {
+    console.error('❌ Error sending appointment email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send appointment email',
+      error: error.message
+    });
+  }
+};
