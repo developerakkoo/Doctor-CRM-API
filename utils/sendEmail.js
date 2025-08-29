@@ -1,34 +1,53 @@
-import nodemailer from 'nodemailer';
-import dotenv from 'dotenv';
+import nodemailer from "nodemailer";
+import dotenv from "dotenv";
 
 dotenv.config();
 
-const sendEmail = async ({ to, subject, text, html }) => {
+/**
+ * Send email using either:
+ *  - Doctor's Gmail + App Password (if provided)
+ *  - System Gmail (from .env) as fallback
+ */
+const sendEmail = async ({ 
+  fromEmail, 
+  fromPass, 
+  to, 
+  subject, 
+  text, 
+  html 
+}) => {
   if (!to) {
-    throw new Error('No recipients defined');
+    throw new Error("No recipients defined");
   }
 
+  // ✅ Use doctor's Gmail if provided, otherwise fallback to system account
+  const emailUser = fromEmail || process.env.EMAIL_USER;
+  const emailPass = fromPass || process.env.EMAIL_PASS;
+
   const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    service: "gmail",
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
+      user: emailUser,
+      pass: emailPass,
     },
-    tls: {
-      rejectUnauthorized: false
-    }
   });
 
   const mailOptions = {
-    from: `"Doctor CRM" <${process.env.EMAIL_USER}>`,
+    from: `"Doctor CRM" <${emailUser}>`,
     to,
     subject,
     ...(text && { text }),
-    ...(html && { html })
+    ...(html && { html }),
   };
 
-  const info = await transporter.sendMail(mailOptions);
-  console.log('📧 Email sent:', info.messageId);
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log("📧 Email sent:", info.messageId);
+    return { success: true, messageId: info.messageId, sentFrom: emailUser };
+  } catch (err) {
+    console.error("❌ Email send failed:", err.message);
+    return { success: false, error: err.message };
+  }
 };
 
 export default sendEmail;

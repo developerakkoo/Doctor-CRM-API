@@ -1233,81 +1233,113 @@ export const getPatientWeeklyStats = async (req, res) => {
 
 export const sendAppointmentEmail = async (req, res) => {
   try {
-    const doctorId = req.doctor?.doctorId;
+    const doctorId = req.doctor?.doctorId || req.doctor?._id;
 
     if (!doctorId) {
-      return res.status(401).json({ success: false, message: 'Unauthorized: Doctor not found in token' });
+      return res.status(401).json({ success: false, message: "Unauthorized: Doctor not found in token" });
     }
 
-    // ✅ Fetch the latest appointment created by this doctor
+    if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+      return res.status(400).json({ success: false, message: "Invalid doctor ID" });
+    }
+
+    // ✅ Fetch latest appointment
     const latestAppointment = await Appointment.findOne({ doctorId })
       .sort({ createdAt: -1 })
       .lean();
 
     if (!latestAppointment) {
-      return res.status(404).json({ success: false, message: 'No appointment found for this doctor' });
+      return res.status(404).json({ success: false, message: "No appointment found for this doctor" });
     }
 
-    const patientId = latestAppointment.patientId;
-
-    if (!patientId) {
-      return res.status(400).json({ success: false, message: 'Patient ID missing in appointment' });
-    }
-
-    const [doctor, patient] = await Promise.all([
-      Doctor.findById(doctorId).lean(),
-      Patient.findById(patientId).lean(),
-    ]);
+    const patient = await Patient.findById(latestAppointment.patientId).lean();
+    const doctor = await Doctor.findById(doctorId).lean();
 
     if (!doctor || !patient) {
-      return res.status(404).json({ success: false, message: 'Doctor or patient not found' });
+      return res.status(404).json({ success: false, message: "Doctor or patient not found" });
     }
 
-    // ✅ Configure transporter
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
+    // ✅ Email body
+    const emailHtml = `
+      <h3>Hello ${patient.firstName},</h3>
+      <p>Your appointment has been confirmed.</p>
+      <ul>
+        <li><strong>Date:</strong> ${new Date(latestAppointment.appointmentDate).toDateString()}</li>
+        <li><strong>Time:</strong> ${latestAppointment.appointmentTime}</li>
+        <li><strong>Doctor:</strong> Dr. ${doctor.name}</li>
+        <li><strong>Location:</strong> ${latestAppointment.location || "Clinic"}</li>
+      </ul>
+      <p>Please be on time and bring any prior reports if available.</p>
+      <br>
+      <p>Thank you,<br/> ${doctor.name}</p>
+    `;
+
+    // ✅ Try sending email using doctor's Gmail if available, else fallback
+    const emailResponse = await sendEmail({
+      fromEmail: doctor.email,                 // doctor’s Gmail if available
+      fromPass: doctor.gmailAppPassword,       // doctor’s App Password if available
+      to: patient.email,
+      subject: "📅 Appointment Confirmation",
+      html: emailHtml,
     });
 
-    // ✅ Compose email
-    const mailOptions = {
-      from: `"${doctor.name}" <${process.env.EMAIL_USER}>`,
-      to: patient.email,
-      subject: '📅 Appointment Confirmation',
-      html: `
-        <h3>Hello ${patient.firstName},</h3>
-        <p>Your appointment has been confirmed.</p>
-        <ul>
-          <li><strong>Date:</strong> ${new Date(latestAppointment.appointmentDate).toDateString()}</li>
-          <li><strong>Time:</strong> ${latestAppointment.appointmentTime}</li>
-          <li><strong>Doctor:</strong> Dr. ${doctor.name}</li>
-          <li><strong>Location:</strong> ${latestAppointment.location || 'Clinic'}</li>
-        </ul>
-        <p>Please be on time and bring any prior reports if available.</p>
-        <br>
-        <p>Thank you,<br/>Dr. ${doctor.name}</p>
-      `
-    };
-
-    // ✅ Send email
-    await transporter.sendMail(mailOptions);
+    if (!emailResponse.success) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send appointment email",
+        error: emailResponse.error,
+      });
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Appointment email sent to patient successfully',
-      emailSentTo: patient.email,
-      appointmentId: latestAppointment._id
+      message: "Appointment email sent successfully",
+      sentFrom: emailResponse.sentFrom,
+      sentTo: patient.email,
+      appointmentId: latestAppointment._id,
     });
-
   } catch (error) {
-    console.error('❌ Error sending appointment email:', error);
+    console.error("❌ Error sending appointment email:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to send appointment email',
-      error: error.message
+      message: "Server error while sending appointment email",
+      error: error.message,
     });
+  }
+};
+
+export const deleteAppointment = async (req, res) => {
+  try {
+    const doctorId = req.doctor?._id; // doctor ID from JWT middleware
+    const { appointmentId } = req.params;
+
+    if (!doctorId) {
+      return res.status(401).json({ message: "Unauthorized access" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(appointmentId)) {
+      return res.status(400).json({ message: "Invalid appointment ID" });
+    }
+
+    // Find appointment and ensure doctor owns it
+    const appointment = await Appointment.findOne({
+      _id: appointmentId,
+      doctorId: doctorId,
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ message: "Appointment not found or unauthorized" });
+    }
+
+    await Appointment.findByIdAndDelete(appointmentId);
+
+    res.status(200).json({
+      success: true,
+      message: "Appointment deleted successfully",
+      appointmentId: appointmentId,
+    });
+  } catch (error) {
+    console.error("Error deleting appointment:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };

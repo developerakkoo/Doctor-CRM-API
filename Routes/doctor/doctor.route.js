@@ -9,7 +9,7 @@ import { authorize, authorizeAdminOnly } from '../../middlewares/role.middleware
 
 
 import { resetDoctorPassword , getDoctorPatients , resetPassword,requestPasswordReset , getDoctorVideos } from '../../Controller/doctor/doctor.controller.js';
-import { getPatientDetails , getPatientCounts , createAppointment, uploadDoctorVideo ,  getWeeklyPatientCount , updatePatientByDoctor , getPatientOverviewStats , getPatientWeeklyStats , editAppointment ,
+import { getPatientDetails , getPatientCounts , createAppointment, uploadDoctorVideo ,  getWeeklyPatientCount , updatePatientByDoctor , getPatientOverviewStats , getPatientWeeklyStats , editAppointment , deleteAppointment , 
  sendAppointmentEmail,  streamDoctorVideo , getTodaysAppointments , getUpcomingAppointmentsForDoctor , getFilteredAppointments , getRecentPatientsForDoctor , getPatientsStats } from "../../Controller/doctor/doctor.controller.js";
 
 import uploadVideoMiddleware  from '../../middlewares/videoUpload.middleware.js';
@@ -63,10 +63,11 @@ router.get('/appointments/today', verifyAccess(['doctor']), getTodaysAppointment
 
 router.patch('/appointments/edit/:id/', verifyAccess(['doctor']), editAppointment);
 
-
 router.get("/upcoming-appointments", verifyAccess(['doctor']), getUpcomingAppointmentsForDoctor);
 
 router.get("/appointments/filter",verifyAccess(['doctor']), getFilteredAppointments);
+
+router.delete("/appointments/delete/:appointmentId", verifyAccess(['doctor']) , deleteAppointment);
 
 router.post('/appointments/notify', verifyAccess(['doctor']), sendAppointmentEmail);
 //  /api/doctors/recent-patients
