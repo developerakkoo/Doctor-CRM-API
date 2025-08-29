@@ -24,7 +24,8 @@ export const verifyAccess = (allowedRoles = []) => async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    console.log("✅ JWT decoded:", decoded);
+    // console.log("✅ JWT decoded:", decoded);
+
 
     const role = decoded.role?.toLowerCase();
     if (!allowedRoles.includes(role)) {
@@ -42,7 +43,7 @@ export const verifyAccess = (allowedRoles = []) => async (req, res, next) => {
 
       // Ensure doctorId is always string for filtering
       req.doctor = { ...doctor.toObject(), doctorId: doctor._id.toString() };
-      console.log("👨‍⚕️ Doctor attached to req:", req.doctor);
+      // console.log("👨‍⚕️ Doctor attached to req:", req.doctor);
     } 
     else if (role === "patient") {
       if (!decoded.patientId) 
@@ -53,7 +54,7 @@ export const verifyAccess = (allowedRoles = []) => async (req, res, next) => {
         return res.status(404).json({ success: false, message: "Patient not found" });
 
       req.patient = patient;
-      console.log("🧑 Patient attached to req:", req.patient);
+      // console.log("🧑 Patient attached to req:", req.patient);
     }
 
     next();
