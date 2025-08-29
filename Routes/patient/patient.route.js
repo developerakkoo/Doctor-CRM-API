@@ -16,14 +16,14 @@ import { scheduleAppointment } from '../../Controller/patient/patient.controller
 const router = express.Router();
 
 // Patient registration (only doctor can create patient)
-router.post("/create", verifyDoctor, createPatient);
+router.post("/create", verifyAccess(['doctor']), createPatient);
 
 // Patient login
 router.post('/login', loginPatient);
 
 // Profile
-router.get('/profile', verifyPatient, getPatientProfile);
-router.put('/profile/update', verifyPatient, updatePatientProfile);
+router.get('/profile', verifyAccess(['patient']), getPatientProfile);
+router.put('/profile/update', verifyAccess(['patient']), updatePatientProfile);
 
 
 // Reports and prescriptions
