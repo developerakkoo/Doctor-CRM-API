@@ -903,73 +903,38 @@ export const editAppointment = async (req, res) => {
   }
 };
 
-
-
-
 export const getUpcomingAppointmentsForDoctor = async (req, res) => {
   try {
     const doctorIdFromJWT = req.doctor?.doctorId || req.doctor?._id;
 
     if (!doctorIdFromJWT) {
-      return res.status(401).json({ success: false, message: "Unauthorized access" });
+      return res.status(401).json({ message: "Unauthorized access" });
     }
 
-    let doctor;
-    if (mongoose.Types.ObjectId.isValid(doctorIdFromJWT)) {
-      doctor = await Doctor.findById(doctorIdFromJWT);
+    if (!mongoose.Types.ObjectId.isValid(doctorIdFromJWT)) {
+      return res.status(400).json({ message: "Invalid doctor ID" });
     }
 
+    const doctor = await Doctor.findById(doctorIdFromJWT);
     if (!doctor) {
-      return res.status(404).json({ success: false, message: "Doctor not found" });
+      return res.status(404).json({ message: "Doctor not found" });
     }
 
-    // Get today's date at midnight
+    // Today's midnight
     const now = moment().startOf("day").toDate();
 
-    // Fetch patients who have appointments with this doctor from today onwards
-    const patients = await Patient.find({
-      "appointments.doctorId": doctor._id,
-      "appointments.appointmentDate": { $gte: now }
-    });
+    // Fetch appointments from today onwards
+    const appointments = await Appointment.find({
+      doctorId: doctor._id,
+      appointmentDate: { $gte: now }
+    })
+      .populate("patientId", "name age gender") // keep same as today's controller
+      .sort({ appointmentDate: 1, appointmentTime: 1 });
 
-    const upcomingAppointments = [];
-
-    patients.forEach(patient => {
-      patient.appointments.forEach(appt => {
-        if (
-          appt.doctorId?.toString() === doctor._id.toString() &&
-          new Date(appt.appointmentDate) >= now
-        ) {
-          upcomingAppointments.push({
-            patientId: patient._id,
-            patientName: `${patient.firstName} ${patient.lastName}`,
-            appointmentDate: appt.appointmentDate,
-            appointmentTime: appt.appointmentTime, // <-- added time
-            reason: appt.reason || 'N/A',
-            status: appt.status,
-            doctorId: doctor._id,
-            doctorName: doctor.name || "Unknown"
-          });
-        }
-      });
-    });
-
-    // Sort by date and time
-    upcomingAppointments.sort((a, b) => {
-      const dateA = new Date(`${a.appointmentDate} ${a.appointmentTime}`);
-      const dateB = new Date(`${b.appointmentDate} ${b.appointmentTime}`);
-      return dateA - dateB;
-    });
-
-    res.status(200).json({
-      success: true,
-      count: upcomingAppointments.length,
-      appointments: upcomingAppointments
-    });
-
+    res.status(200).json({ appointments });
   } catch (error) {
     console.error("Error fetching upcoming appointments for doctor:", error);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
