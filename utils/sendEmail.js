@@ -1,53 +1,36 @@
 import nodemailer from "nodemailer";
-import dotenv from "dotenv";
+import Doctor from "../Modals/doctor/doctor.js";
+import { decrypt } from "./encryption.js";
 
-dotenv.config();
-
-/**
- * Send email using either:
- *  - Doctor's Gmail + App Password (if provided)
- *  - System Gmail (from .env) as fallback
- */
-const sendEmail = async ({ 
-  fromEmail, 
-  fromPass, 
-  to, 
-  subject, 
-  text, 
-  html 
-}) => {
-  if (!to) {
-    throw new Error("No recipients defined");
-  }
-
-  // ✅ Use doctor's Gmail if provided, otherwise fallback to system account
-  const emailUser = fromEmail || process.env.EMAIL_USER;
-  const emailPass = fromPass || process.env.EMAIL_PASS;
-
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: emailUser,
-      pass: emailPass,
-    },
-  });
-
-  const mailOptions = {
-    from: `"Doctor CRM" <${emailUser}>`,
-    to,
-    subject,
-    ...(text && { text }),
-    ...(html && { html }),
-  };
-
+export const sendEmail = async ({ doctorId, to, subject, html }) => {
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("📧 Email sent:", info.messageId);
-    return { success: true, messageId: info.messageId, sentFrom: emailUser };
-  } catch (err) {
-    console.error("❌ Email send failed:", err.message);
-    return { success: false, error: err.message };
+    const doctor = await Doctor.findById(doctorId).lean();
+    if (!doctor || !doctor.smtpPassword) {
+      throw new Error("SMTP credentials not set for this doctor");
+    }
+
+    // 🔓 Decrypt stored password
+    const decryptedPassword = decrypt(doctor.smtpPassword);
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: doctor.email,   // doctor’s Gmail
+        pass: decryptedPassword, // decrypted App Password
+      },
+    });
+
+    await transporter.sendMail({
+      from: doctor.email,
+      to,
+      subject,
+      html,
+    });
+
+    console.log("✅ Email sent to:", to);
+  } catch (error) {
+    console.error("❌ Email send failed:", error.message);
+    throw error;
   }
 };
-
 export default sendEmail;

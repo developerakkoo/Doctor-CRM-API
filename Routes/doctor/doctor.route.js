@@ -9,7 +9,7 @@ import { authorize, authorizeAdminOnly } from '../../middlewares/role.middleware
 
 
 import { resetDoctorPassword , getDoctorPatients , resetPassword,requestPasswordReset , getDoctorVideos } from '../../Controller/doctor/doctor.controller.js';
-import { getPatientDetails , getPatientCounts , createAppointment, uploadDoctorVideo ,  getWeeklyPatientCount , updatePatientByDoctor , getPatientOverviewStats , getPatientWeeklyStats , editAppointment , deleteAppointment , 
+import { getPatientDetails , getPatientCounts , createAppointment, uploadDoctorVideo ,  getWeeklyPatientCount , updatePatientByDoctor , getPatientOverviewStats , getPatientWeeklyStats , editAppointment , deleteAppointment , updateSmtpCredentials , 
  sendAppointmentEmail,  streamDoctorVideo , getTodaysAppointments , getUpcomingAppointmentsForDoctor , getFilteredAppointments , getRecentPatientsForDoctor , getPatientsStats } from "../../Controller/doctor/doctor.controller.js";
 
 import uploadVideoMiddleware  from '../../middlewares/videoUpload.middleware.js';
@@ -82,5 +82,7 @@ router.get('/count/week', verifyAccess(['doctor']) , getWeeklyPatientCount);
 router.get('/patient-stats/months', verifyAccess(['doctor']), getPatientOverviewStats); 
 
 router.get('/patient-stats/weeks', verifyAccess(['doctor']), getPatientWeeklyStats);
+
+router.post("/update-smtp-credentials", verifyAccess(['doctor']) , updateSmtpCredentials);
 
 export default router;

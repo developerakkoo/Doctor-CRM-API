@@ -49,6 +49,9 @@ const doctorSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  smtpEmail: { type: String },  
+  smtpPassword: { type: String },
+
   role: {
     type: String,
     enum: ['admin', 'doctor', 'owner'],
@@ -119,8 +122,12 @@ doctorSchema.pre('save', async function (next) {
   next();
 });
 
-
-
+doctorSchema.pre("save", async function (next) {
+  if (this.isModified("smtpPassword") && this.smtpPassword) {
+    this.smtpPassword = await bcrypt.hash(this.smtpPassword, 10);
+  }
+  next();
+});
 // Geospatial index
 doctorSchema.index({ location: '2dsphere' });
 

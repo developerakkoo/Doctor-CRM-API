@@ -25,6 +25,9 @@ import nodemailer from "nodemailer";
 import sendEmail from '../../utils/sendEmail.js';
 import Counter from '../../Modals/patient/counter.js';
 
+import { encrypt } from "../../utils/encryption.js";
+
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -370,41 +373,61 @@ export const confirmChangePassword = async (req, res) => {
   }
 };
 
-
 export const requestPasswordReset = async (req, res) => {
-  const { email } = req.body;
-
   try {
+    const { email } = req.body;
+
+    // 1️⃣ Find doctor by email
     const doctor = await Doctor.findOne({ email });
     if (!doctor) {
-      return res.status(404).json({ message: "Doctor not found" });
+      return res.status(404).json({ success: false, message: "Doctor not found" });
     }
 
-    // ✅ Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // 2️⃣ Generate OTP
+    const otp = crypto.randomInt(100000, 999999).toString();
 
-    // ✅ Save OTP in DB
+    // 3️⃣ Save OTP + expiry (10 minutes)
     doctor.resetOtp = otp;
-    doctor.resetOtpExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
-
+    doctor.resetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
     await doctor.save();
 
-    // ✅ Send OTP via Email
-    await sendEmail({
-      to: email,
-      subject: "Doctor CRM - Password Reset OTP",
-      text: `Your OTP for password reset is: ${otp}. It is valid for 15 minutes.`
+    // 4️⃣ Send OTP email
+    const result = await sendEmail({
+      doctorId: doctor._id,
+      to: doctor.email,
+      subject: "Password Reset Request - Doctor CRM",
+      html: `
+        <p>Hello Dr. ${doctor.name},</p>
+        <p>You requested a password reset. Use the OTP below to reset your password:</p>
+        <h2>${otp}</h2>
+        <p>This OTP will expire in <b>10 minutes</b>.</p>
+        <p>If you did not request this, please ignore this email.</p>
+        <br/>
+        <p>— Doctor CRM Team</p>
+      `,
     });
 
-    res.status(200).json({
-      message: "Password reset OTP sent to your email",
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send reset email",
+        error: result.error,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP sent to your registered email",
     });
   } catch (error) {
-    console.error("Error in requestPasswordReset:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("❌ Error in requestPasswordReset:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
   }
 };
-
 
 export const getDoctorById = async (req, res) => {
   const { id } = req.params;
@@ -445,45 +468,59 @@ export const getDoctorById = async (req, res) => {
 
 
 export const resetDoctorPassword = async (req, res) => {
-  const { email, otp, newPassword } = req.body;
-
   try {
+    const { email, otp, newPassword } = req.body;
+
+    // 1️⃣ Validate input
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Email, OTP, and new password are required",
+      });
+    }
+
+    // 2️⃣ Find doctor
     const doctor = await Doctor.findOne({ email });
     if (!doctor) {
-      return res.status(404).json({ message: "Doctor not found" });
+      return res.status(404).json({ success: false, message: "Doctor not found" });
     }
 
-    // 🔍 Debug logs
-    // console.log("Stored OTP:", doctor.resetOtp);
-    // console.log("Received OTP:", otp);
-    // console.log("Expiry:", doctor.resetOtpExpiry, "Now:", Date.now());
-
-    // ✅ Check OTP with string conversion
+    // 3️⃣ Check OTP
     if (
-      String(doctor.resetOtp) !== String(otp) ||
+      !doctor.resetOtp ||
       !doctor.resetOtpExpiry ||
-      doctor.resetOtpExpiry < Date.now()
+      doctor.resetOtp !== otp ||
+      doctor.resetOtpExpiry < new Date()
     ) {
-      return res.status(400).json({ message: "Invalid or expired OTP" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired OTP",
+      });
     }
 
-    // ✅ Update password (hook will hash)
-    doctor.password = newPassword;
+    // 4️⃣ Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    doctor.password = hashedPassword;
 
-    // ✅ Clear reset fields
+    // 5️⃣ Clear OTP fields
     doctor.resetOtp = undefined;
     doctor.resetOtpExpiry = undefined;
 
     await doctor.save();
 
-    res.status(200).json({ message: "Password reset successfully" });
+    return res.status(200).json({
+      success: true,
+      message: "Password has been reset successfully",
+    });
   } catch (error) {
-    console.error("Error in resetDoctorPassword:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("❌ Error in resetPasswordConfirm:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
   }
 };
-
-
 
 
 export const logoutDoctor = async (req, res) => {
@@ -1236,11 +1273,17 @@ export const sendAppointmentEmail = async (req, res) => {
     const doctorId = req.doctor?.doctorId || req.doctor?._id;
 
     if (!doctorId) {
-      return res.status(401).json({ success: false, message: "Unauthorized: Doctor not found in token" });
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: Doctor not found in token",
+      });
     }
 
     if (!mongoose.Types.ObjectId.isValid(doctorId)) {
-      return res.status(400).json({ success: false, message: "Invalid doctor ID" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid doctor ID",
+      });
     }
 
     // ✅ Fetch latest appointment
@@ -1249,14 +1292,27 @@ export const sendAppointmentEmail = async (req, res) => {
       .lean();
 
     if (!latestAppointment) {
-      return res.status(404).json({ success: false, message: "No appointment found for this doctor" });
+      return res.status(404).json({
+        success: false,
+        message: "No appointment found for this doctor",
+      });
     }
 
     const patient = await Patient.findById(latestAppointment.patientId).lean();
     const doctor = await Doctor.findById(doctorId).lean();
 
     if (!doctor || !patient) {
-      return res.status(404).json({ success: false, message: "Doctor or patient not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Doctor or patient not found",
+      });
+    }
+
+    if (!doctor.smtpPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "SMTP credentials not set. Please update SMTP credentials first.",
+      });
     }
 
     // ✅ Email body
@@ -1271,35 +1327,25 @@ export const sendAppointmentEmail = async (req, res) => {
       </ul>
       <p>Please be on time and bring any prior reports if available.</p>
       <br>
-      <p>Thank you,<br/> ${doctor.name}</p>
+      <p>Thank you,<br/> Dr. ${doctor.name}</p>
     `;
 
-    // ✅ Try sending email using doctor's Gmail if available, else fallback
-    const emailResponse = await sendEmail({
-      fromEmail: doctor.email,                 // doctor’s Gmail if available
-      fromPass: doctor.gmailAppPassword,       // doctor’s App Password if available
+    // ✅ Send using doctor’s Gmail via sendEmail util
+    await sendEmail({
+      doctorId: doctor._id,
       to: patient.email,
       subject: "📅 Appointment Confirmation",
       html: emailHtml,
     });
 
-    if (!emailResponse.success) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send appointment email",
-        error: emailResponse.error,
-      });
-    }
-
     res.status(200).json({
       success: true,
       message: "Appointment email sent successfully",
-      sentFrom: emailResponse.sentFrom,
       sentTo: patient.email,
       appointmentId: latestAppointment._id,
     });
   } catch (error) {
-    console.error("❌ Error sending appointment email:", error);
+    console.error("❌ Error sending appointment email:", error.message);
     res.status(500).json({
       success: false,
       message: "Server error while sending appointment email",
@@ -1343,3 +1389,44 @@ export const deleteAppointment = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+// ✅ Update Doctor SMTP (Gmail App Password)
+
+export const updateSmtpCredentials = async (req, res) => {
+  try {
+    const doctorId = req.doctor?.doctorId || req.doctor?._id;
+    const { smtpPassword } = req.body;
+
+    if (!doctorId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: Doctor not found",
+      });
+    }
+
+    if (!smtpPassword || smtpPassword.length < 16) {
+      return res.status(400).json({
+        success: false,
+        message: "SMTP App Password must be at least 16 chars",
+      });
+    }
+
+    // 🔒 Encrypt before saving
+    const encryptedPassword = encrypt(smtpPassword);
+
+    await Doctor.findByIdAndUpdate(doctorId, { smtpPassword: encryptedPassword });
+
+    res.status(200).json({
+      success: true,
+      message: "SMTP credentials updated successfully",
+    });
+  } catch (error) {
+    console.error("❌ Error updating SMTP:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
