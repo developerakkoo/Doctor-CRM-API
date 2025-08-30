@@ -429,6 +429,7 @@ export const requestPasswordReset = async (req, res) => {
   }
 };
 
+
 export const getDoctorById = async (req, res) => {
   const { id } = req.params;
   // console.log("Received request to get doctor by ID:", id);
@@ -467,11 +468,10 @@ export const getDoctorById = async (req, res) => {
 };
 
 
-export const resetDoctorPassword = async (req, res) => {
+  export const resetDoctorPassword = async (req, res) => { 
   try {
     const { email, otp, newPassword } = req.body;
 
-    // 1️⃣ Validate input
     if (!email || !otp || !newPassword) {
       return res.status(400).json({
         success: false,
@@ -479,13 +479,11 @@ export const resetDoctorPassword = async (req, res) => {
       });
     }
 
-    // 2️⃣ Find doctor
     const doctor = await Doctor.findOne({ email });
     if (!doctor) {
       return res.status(404).json({ success: false, message: "Doctor not found" });
     }
 
-    // 3️⃣ Check OTP
     if (
       !doctor.resetOtp ||
       !doctor.resetOtpExpiry ||
@@ -498,11 +496,10 @@ export const resetDoctorPassword = async (req, res) => {
       });
     }
 
-    // 4️⃣ Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    doctor.password = hashedPassword;
+    // ✅ Assign plain password (pre-save hook will hash it)
+    doctor.password = newPassword;
 
-    // 5️⃣ Clear OTP fields
+    // Clear OTP
     doctor.resetOtp = undefined;
     doctor.resetOtpExpiry = undefined;
 
@@ -513,7 +510,7 @@ export const resetDoctorPassword = async (req, res) => {
       message: "Password has been reset successfully",
     });
   } catch (error) {
-    console.error("❌ Error in resetPasswordConfirm:", error.message);
+    console.error("❌ Error in resetDoctorPassword:", error.message);
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -521,6 +518,7 @@ export const resetDoctorPassword = async (req, res) => {
     });
   }
 };
+
 
 
 export const logoutDoctor = async (req, res) => {
