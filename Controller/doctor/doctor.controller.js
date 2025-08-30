@@ -519,8 +519,6 @@ export const getDoctorById = async (req, res) => {
   }
 };
 
-
-
 export const logoutDoctor = async (req, res) => {
   try {
     // If using cookies, clear it (optional depending on frontend strategy)
