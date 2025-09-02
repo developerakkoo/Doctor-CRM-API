@@ -38,3 +38,4 @@ export const decrypt = (encryptedText) => {
   decrypted += decipher.final("utf8");
   return decrypted;
 };
+export default {encrypt,decrypt};

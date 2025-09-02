@@ -22,11 +22,11 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
 import nodemailer from "nodemailer";
-import sendEmail from '../../utils/sendEmail.js';
+import  sendEmail  from '../../utils/sendEmail.js';
 import Counter from '../../Modals/patient/counter.js';
+import { oauth2Client } from "../../utils/googleAuth.js";
 
-import { encrypt } from "../../utils/encryption.js";
-
+import  encrypt  from "../../utils/encryption.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1423,6 +1423,80 @@ export const updateSmtpCredentials = async (req, res) => {
       message: "Server error",
       error: error.message,
     });
+  }
+};
+
+
+
+export const googleAuth = async (req, res) => {
+  try {
+    const url = oauth2Client.generateAuthUrl({
+      access_type: "offline",
+      prompt: "consent",
+      scope: [
+        "https://www.googleapis.com/auth/userinfo.profile",
+        "https://www.googleapis.com/auth/userinfo.email"
+      ],
+    });
+    res.redirect(url);
+  } catch (error) {
+    console.error("Google Auth error:", error);
+    res.status(500).json({ error: "Failed to start Google login" });
+  }
+};
+
+/**
+ * Handles OAuth callback from Google
+ */
+export const googleAuthCallback = async (req, res) => {
+  try {
+    const { code } = req.query;
+    if (!code) {
+      return res.status(400).json({ error: "Missing authorization code" });
+    }
+
+    // Exchange code for tokens
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
+
+    // Fetch Google profile
+    const response = await axios.get(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      { headers: { Authorization: `Bearer ${tokens.access_token}` } }
+    );
+
+    const { email, name, picture } = response.data;
+
+    // Find or create doctor
+    let doctor = await Doctor.findOne({ email });
+    if (!doctor) {
+      doctor = new Doctor({
+        name,
+        email,
+        profilePhoto: picture,
+        isVerified: true, // OAuth verified
+        authProvider: "google",
+      });
+      await doctor.save();
+    }
+
+    // Generate JWT
+    const token = jwt.sign(
+      { id: doctor._id, role: "doctor" },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    // Return doctor + token
+    res.status(200).json({
+      success: true,
+      message: "Google OAuth login successful",
+      doctor,
+      token,
+    });
+  } catch (error) {
+    console.error("OAuth callback error:", error);
+    res.status(500).json({ error: "Google login failed" });
   }
 };
 

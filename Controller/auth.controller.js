@@ -3,6 +3,9 @@ import RefreshToken from '../Modals/RefreshToken.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import { oauth2Client } from "../utils/googleAuth.js";
+import { encrypt } from "../utils/cryptoHelper.js";
+import { google } from "googleapis";
 
 import {
   signAccessToken,
@@ -102,3 +105,76 @@ export const logoutDoctor = async (req, res) => {
     res.status(500).json({ msg: 'Server error' });
   }
 };
+
+
+// import Doctor from "../models/doctor.js";
+
+
+export const googleCallback = async (req, res) => {
+  try {
+    const { code } = req.query;
+
+    // Exchange code for tokens
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
+
+    // Fetch Google user info
+    const oauth2 = google.oauth2({
+      auth: oauth2Client,
+      version: "v2",
+    });
+    const { data } = await oauth2.userinfo.get(); // contains email, name, picture
+
+    // Check if doctor exists
+    let doctor = await Doctor.findOne({ email: data.email });
+
+    if (!doctor) {
+      // If new doctor → create profile
+      doctor = new Doctor({
+        name: data.name || "Unknown",
+        email: data.email,
+        password: "TEMP", // You can generate random if not needed
+        oauthRefreshToken: tokens.refresh_token ? encrypt(tokens.refresh_token) : null,
+        emailVerified: true // Since Google already verified
+      });
+    } else {
+      // If existing doctor → update refresh token
+      if (tokens.refresh_token) {
+        doctor.oauthRefreshToken = encrypt(tokens.refresh_token);
+      }
+      doctor.emailVerified = true;
+    }
+
+    await doctor.save();
+
+    // ✅ Redirect doctor to CRM dashboard (frontend route)
+    res.redirect(`http://localhost:3000/dashboard?email=${doctor.email}`);
+
+  } catch (err) {
+    console.error("Google OAuth Error:", err);
+    res.status(500).json({ error: "Google OAuth failed" });
+  }
+};
+
+
+export const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ error: "Missing token" });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const doctor = await Doctor.findById(decoded.id);
+    if (!doctor) return res.status(404).json({ error: "Doctor not found" });
+
+    doctor.emailVerified = true;
+    await doctor.save();
+
+    res.send("✅ Email verified successfully! You can now connect Gmail.");
+  } catch (err) {
+    console.error("Email verification failed:", err);
+    res.status(400).json({ error: "Invalid or expired token" });
+  }
+};
+
+
+export default verifyEmail;

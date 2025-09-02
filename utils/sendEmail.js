@@ -1,38 +1,39 @@
-import nodemailer from "nodemailer"; 
-import Doctor from "../Modals/doctor/doctor.js";
-import { decrypt } from "./encryption.js";
+import nodemailer from "nodemailer";
+import { google } from "googleapis";
+import { decrypt } from "./cryptoHelper.js";
 
-export const sendEmail = async ({ doctorId, to, subject, html }) => {
-  try {
-    const doctor = await Doctor.findById(doctorId).lean();
+const sendDoctorMail = async (doctor, subject, text) => {
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
 
-    // ✅ use doctor-specific SMTP if exists, otherwise throw/fallback
-    if (!doctor || !doctor.smtpPassword) {
-      throw new Error("SMTP credentials not set for this doctor");
-    }
+  oauth2Client.setCredentials({
+    refresh_token: decrypt(doctor.oauthRefreshToken),
+  });
 
-    const decryptedPassword = decrypt(doctor.smtpPassword);
+  const { token } = await oauth2Client.getAccessToken();
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: doctor.email,
-        pass: decryptedPassword,
-      },
-    });
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      type: "OAuth2",
+      user: doctor.email,
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      refreshToken: decrypt(doctor.oauthRefreshToken),
+      accessToken: token,
+    },
+  });
 
-    await transporter.sendMail({
-      from: doctor.email,
-      to,
-      subject,
-      html,
-    });
-
-    console.log("✅ Email sent to:", to);
-    return { success: true };   // <-- return success object
-  } catch (error) {
-    console.error("❌ Email send failed:", error.message);
-    return { success: false, error: error.message }; // <-- return failure
-  }
+  await transporter.sendMail({
+    from: doctor.email,
+    to: doctor.email, // you can adjust recipient here
+    subject,
+    text,
+  });
 };
-export default sendEmail;
+
+// ✅ Fix: export the actual function name
+export default sendDoctorMail;

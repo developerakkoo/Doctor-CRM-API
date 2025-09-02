@@ -49,8 +49,11 @@ const doctorSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  smtpEmail: { type: String },  
-  smtpPassword: { type: String },
+
+  // smtpEmail: { type: String },  
+  // smtpPassword: { type: String },
+
+  oauthRefreshToken: { type: String },  // encrypted before saving
 
   role: {
     type: String,
@@ -101,7 +104,13 @@ const doctorSchema = new mongoose.Schema({
   resetOtp: String,
   resetOtpExpiry: Date,
   resetPasswordOtp: { type: String },
-  resetPasswordExpires: { type: Date }
+  resetPasswordExpires: { type: Date },
+
+
+  emailVerified: { type: Boolean, default: false }
+
+
+
 });
 
 // ✅ Pre-save hook to hash password if modified
