@@ -33,6 +33,14 @@ const doctorSchema = new mongoose.Schema({
     required: true,
     select: true
   },
+    
+  smtpPassword: { type: String },
+  googleId: { type: String },
+  oauthRefreshToken: { type: String , select: true},  // encrypted before saving
+  oauthAccessToken: { type: String },  // optional, regenerated from refresh token
+  oauthTokenExpiry: { type: Date },    // optional
+  tokenExpiry: { type: Date },
+
   email: {
     type: String,
     required: true,
@@ -50,10 +58,8 @@ const doctorSchema = new mongoose.Schema({
     default: ''
   },
 
-  // smtpEmail: { type: String },  
-  // smtpPassword: { type: String },
+  // smtpEmail: { type: String 
 
-  oauthRefreshToken: { type: String },  // encrypted before saving
 
   role: {
     type: String,
@@ -108,8 +114,6 @@ const doctorSchema = new mongoose.Schema({
 
 
   emailVerified: { type: Boolean, default: false }
-
-
 
 });
 

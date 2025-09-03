@@ -2,38 +2,53 @@ import nodemailer from "nodemailer";
 import { google } from "googleapis";
 import { decrypt } from "./cryptoHelper.js";
 
-const sendDoctorMail = async (doctor, subject, text) => {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
-  );
+const sendEmail = async ({ doctor, to, subject, html }) => {
+  try {
+    // if (!doctor?.oauthRefreshToken) {
+    //   throw new Error("Doctor does not have OAuth refresh token saved.");
+    // }
 
-  oauth2Client.setCredentials({
-    refresh_token: decrypt(doctor.oauthRefreshToken),
-  });
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
 
-  const { token } = await oauth2Client.getAccessToken();
+    oauth2Client.setCredentials({
+      refresh_token: decrypt(doctor.oauthRefreshToken),
+    });
 
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      type: "OAuth2",
-      user: doctor.email,
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      refreshToken: decrypt(doctor.oauthRefreshToken),
-      accessToken: token,
-    },
-  });
+    const accessTokenResponse = await oauth2Client.getAccessToken();
+    const accessToken = accessTokenResponse?.token;
 
-  await transporter.sendMail({
-    from: doctor.email,
-    to: doctor.email, // you can adjust recipient here
-    subject,
-    text,
-  });
+    if (!accessToken) {
+      throw new Error("Failed to generate access token from refresh token");
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        type: "OAuth2",
+        user: doctor.email, // sender = doctor
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        refreshToken: decrypt(doctor.oauthRefreshToken),
+        accessToken,
+      },
+    });
+
+    await transporter.sendMail({
+      from: `"Dr. ${doctor.name}" <${doctor.email}>`,
+      to,
+      subject,
+      html,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("❌ Error in sendEmail:", error.message);
+    return { success: false, error: error.message };
+  }
 };
 
-// ✅ Fix: export the actual function name
-export default sendDoctorMail;
+export default sendEmail;
