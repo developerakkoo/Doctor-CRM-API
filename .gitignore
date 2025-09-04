@@ -140,3 +140,4 @@ vite.config.ts.timestamp-*
 /public/prescriptions/
 /public/bills/
 /uploads/videos/.env
+.env
