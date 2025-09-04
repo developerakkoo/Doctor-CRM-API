@@ -2,7 +2,6 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
-
 import Doctor from '../../Modals/doctor/doctor.js';
 import fs from 'fs';
 import path from 'path';
@@ -1432,11 +1431,11 @@ export const googleAuth = async (req, res) => {
  */
 
 
+
 export const googleAuthCallback = async (req, res) => {
   try {
     const code = req.query.code;
 
-    // 🔍 Debug: show the incoming code
     console.log("=== GOOGLE AUTH CALLBACK ===");
     console.log("Received Authorization Code:", code || "❌ None");
     console.log("============================");
@@ -1448,16 +1447,7 @@ export const googleAuthCallback = async (req, res) => {
       });
     }
 
-    // 🔍 Debug environment variables
-    console.log("=== GOOGLE OAUTH DEBUG ===");
-    console.log("Client ID:", process.env.GOOGLE_CLIENT_ID);
-    console.log(
-      "Client Secret:",
-      process.env.GOOGLE_CLIENT_SECRET ? "loaded ✅" : "❌ MISSING"
-    );
-    console.log("Redirect URI:", process.env.GOOGLE_REDIRECT_URI);
-    console.log("==========================");
-
+    // OAuth client
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
@@ -1478,15 +1468,14 @@ export const googleAuthCallback = async (req, res) => {
       });
     }
 
-    // 2️⃣ Set credentials
     oauth2Client.setCredentials(tokens);
 
-    // 3️⃣ Fetch user info
+    // 2️⃣ Fetch user info
     console.log("👤 Fetching Google user info...");
     const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
     const { data: user } = await oauth2.userinfo.get();
 
-    // 4️⃣ Save doctor
+    // 3️⃣ Save doctor
     let doctor = await Doctor.findOne({ email: user.email });
     if (!doctor) {
       doctor = new Doctor({
@@ -1497,15 +1486,26 @@ export const googleAuthCallback = async (req, res) => {
     } else {
       doctor.oauthRefreshToken = encrypt(tokens.refresh_token);
     }
-
     await doctor.save();
 
     console.log("✅ Google login successful:", user.email);
 
+    // 4️⃣ Generate JWT
+    const token = jwt.sign(
+      { id: doctor._id, email: doctor.email }, // payload
+      process.env.JWT_SECRET,                  // secret
+      { expiresIn: "7d" }                      // options
+    );
+
     return res.json({
       success: true,
       message: "Google login successful ✅",
-      user,
+      token,        // 🔑 Send JWT to frontend
+      user: {
+        id: doctor._id,
+        name: doctor.name,
+        email: doctor.email,
+      },
     });
   } catch (err) {
     console.error("\n\t❌ OAuth callback error:", err.response?.data || err.message);
@@ -1516,6 +1516,8 @@ export const googleAuthCallback = async (req, res) => {
     });
   }
 };
+
+
 
 
 
