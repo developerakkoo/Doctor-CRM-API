@@ -23,6 +23,8 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
 import sendDoctorMail from "../../utils/sendDoctorMail.js";
+import  sendAppointmentMail  from "../../utils/sendAppointmentMail.js";
+
 
 import nodemailer from "nodemailer";
 import sendEmail from '../../utils/sendEmail.js';
@@ -379,6 +381,7 @@ export const confirmChangePassword = async (req, res) => {
 };
 
 
+
 export const requestPasswordReset = async (req, res) => {
   try {
     const { email } = req.body;
@@ -411,9 +414,10 @@ export const requestPasswordReset = async (req, res) => {
     doctor.resetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
     await doctor.save();
 
-    // 4️⃣ Send OTP via Gmail OAuth
+    // 4️⃣ Send OTP email (doctor → doctor)
     const result = await sendDoctorMail(
       doctor,
+      doctor.email, // 👈 FIXED: recipient
       "🔑 Password Reset Request - Doctor CRM",
       `
       <p>Hello Dr. ${doctor.name},</p>
@@ -446,6 +450,7 @@ export const requestPasswordReset = async (req, res) => {
     });
   }
 };
+
 
 
 
@@ -1301,66 +1306,23 @@ export const sendAppointmentEmail = async (req, res) => {
       });
     }
 
-    // ✅ Fetch latest appointment
-    const latestAppointment = await Appointment.findOne({ doctorId })
-      .sort({ createdAt: -1 })
-      .lean();
+    const result = await sendAppointmentMail(doctorId);
 
-    if (!latestAppointment) {
-      return res.status(404).json({
-        success: false,
-        message: "No appointment found for this doctor",
-      });
-    }
-
-    const patient = await Patient.findById(latestAppointment.patientId).lean();
-    const doctor = await Doctor.findById(doctorId).lean();
-
-    if (!doctor || !patient) {
-      return res.status(404).json({
-        success: false,
-        message: "Doctor or patient not found",
-      });
-    }
-
-    if (!doctor.smtpPassword) {
+    if (!result.success) {
       return res.status(400).json({
         success: false,
-        message: "SMTP credentials not set. Please update SMTP credentials first.",
+        message: result.error,
       });
     }
-
-    // ✅ Email body
-    const emailHtml = `
-      <h3>Hello ${patient.firstName},</h3>
-      <p>Your appointment has been confirmed.</p>
-      <ul>
-        <li><strong>Date:</strong> ${new Date(latestAppointment.appointmentDate).toDateString()}</li>
-        <li><strong>Time:</strong> ${latestAppointment.appointmentTime}</li>
-        <li><strong>Doctor:</strong> Dr. ${doctor.name}</li>
-        <li><strong>Location:</strong> ${latestAppointment.location || "Clinic"}</li>
-      </ul>
-      <p>Please be on time and bring any prior reports if available.</p>
-      <br>
-      <p>Thank you,<br/> Dr. ${doctor.name}</p>
-    `;
-
-    // ✅ Send using doctor’s Gmail via sendEmail util
-    await sendEmail({
-      doctorId: doctor._id,
-      to: patient.email,
-      subject: "📅 Appointment Confirmation",
-      html: emailHtml,
-    });
 
     res.status(200).json({
       success: true,
       message: "Appointment email sent successfully",
-      sentTo: patient.email,
-      appointmentId: latestAppointment._id,
+      result,
     });
+
   } catch (error) {
-    console.error("❌ Error sending appointment email:", error.message);
+    console.error("❌ Controller error:", error.message);
     res.status(500).json({
       success: false,
       message: "Server error while sending appointment email",
@@ -1368,6 +1330,7 @@ export const sendAppointmentEmail = async (req, res) => {
     });
   }
 };
+
 
 export const deleteAppointment = async (req, res) => {
   try {
@@ -1472,12 +1435,28 @@ export const googleAuth = async (req, res) => {
 export const googleAuthCallback = async (req, res) => {
   try {
     const code = req.query.code;
+
+    // 🔍 Debug: show the incoming code
+    console.log("=== GOOGLE AUTH CALLBACK ===");
+    console.log("Received Authorization Code:", code || "❌ None");
+    console.log("============================");
+
     if (!code) {
       return res.status(400).json({
         success: false,
         message: "Missing code in callback",
       });
     }
+
+    // 🔍 Debug environment variables
+    console.log("=== GOOGLE OAUTH DEBUG ===");
+    console.log("Client ID:", process.env.GOOGLE_CLIENT_ID);
+    console.log(
+      "Client Secret:",
+      process.env.GOOGLE_CLIENT_SECRET ? "loaded ✅" : "❌ MISSING"
+    );
+    console.log("Redirect URI:", process.env.GOOGLE_REDIRECT_URI);
+    console.log("==========================");
 
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -1486,10 +1465,11 @@ export const googleAuthCallback = async (req, res) => {
     );
 
     // 1️⃣ Exchange code for tokens
+    console.log("🔄 Exchanging code for tokens...");
     const { tokens } = await oauth2Client.getToken(code);
 
     if (!tokens.refresh_token) {
-      console.warn("⚠️ Google did not return refresh_token. Forcing re-consent.");
+      console.warn("⚠️ No refresh_token received. Re-consent needed.");
       return res.status(400).json({
         success: false,
         message:
@@ -1498,14 +1478,15 @@ export const googleAuthCallback = async (req, res) => {
       });
     }
 
-    // 2️⃣ Set credentials for API calls
+    // 2️⃣ Set credentials
     oauth2Client.setCredentials(tokens);
 
     // 3️⃣ Fetch user info
+    console.log("👤 Fetching Google user info...");
     const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
     const { data: user } = await oauth2.userinfo.get();
 
-    // 4️⃣ Save doctor & encrypted refresh token
+    // 4️⃣ Save doctor
     let doctor = await Doctor.findOne({ email: user.email });
     if (!doctor) {
       doctor = new Doctor({
@@ -1519,17 +1500,61 @@ export const googleAuthCallback = async (req, res) => {
 
     await doctor.save();
 
+    console.log("✅ Google login successful:", user.email);
+
     return res.json({
       success: true,
       message: "Google login successful ✅",
       user,
     });
   } catch (err) {
-    console.error("\tOAuth callback error:", err);
+    console.error("\n\t❌ OAuth callback error:", err.response?.data || err.message);
     res.status(500).json({
       success: false,
       message: "OAuth callback failed",
       error: err.message,
     });
+  }
+};
+
+
+
+export const connectGmail = (req, res) => {
+  const scopes = [
+    "https://mail.google.com/", // Full Gmail access
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+  ];
+
+  const url = oAuth2Client.generateAuthUrl({
+    access_type: "offline", // ensures refresh_token is returned
+    prompt: "consent", // always ask for refresh_token
+    scope: scopes,
+  });
+
+  res.redirect(url);
+};
+
+// Step 2: Google redirects here after consent
+export const gmailCallback = async (req, res) => {
+  try {
+    const { code } = req.query;
+
+    const { tokens } = await oAuth2Client.getToken(code);
+
+    oAuth2Client.setCredentials(tokens);
+
+    // Example: doctorId comes from session/JWT
+    const doctorId = req.user._id;
+
+    // Save refresh token in DB
+    await Doctor.findByIdAndUpdate(doctorId, {
+      oauthRefreshToken: tokens.refresh_token,
+    });
+
+    res.json({ success: true, message: "Gmail connected successfully!" });
+  } catch (err) {
+    console.error("OAuth Error:", err);
+    res.status(500).json({ success: false, error: "Failed to connect Gmail" });
   }
 };

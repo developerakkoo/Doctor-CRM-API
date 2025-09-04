@@ -31,7 +31,7 @@ import {
   getFilteredAppointments,
   getRecentPatientsForDoctor,
   getPatientsStats,
-  logoutDoctor, googleAuth , googleAuthCallback
+  logoutDoctor, googleAuth , googleAuthCallback , connectGmail , gmailCallback
 } from '../../Controller/doctor/doctor.controller.js';
 
 import upload from '../../middlewares/upload.js';
@@ -61,6 +61,12 @@ router.get('/auth/google', googleAuth);
 
 // Google callback route (redirect URI must match your Google console setup)
 router.get('/auth/google/callback', googleAuthCallback);
+
+
+router.get("/connect/google", connectGmail);
+
+// Google redirects here -> saves refresh_token in DB
+router.get("/connect/google/callback", gmailCallback);
 
 //
 // 🔹 Doctor routes (protected)
