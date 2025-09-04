@@ -1435,6 +1435,11 @@ export const googleAuth = async (req, res) => {
 export const googleAuthCallback = async (req, res) => {
   try {
     const code = req.query.code;
+
+    console.log("=== GOOGLE AUTH CALLBACK ===");
+    console.log("Received Authorization Code:", code || "❌ None");
+    console.log("============================");
+
     if (!code) {
       return res.status(400).json({
         success: false,
@@ -1442,14 +1447,19 @@ export const googleAuthCallback = async (req, res) => {
       });
     }
 
+    // OAuth client
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
       process.env.GOOGLE_REDIRECT_URI
     );
 
+    // 1️⃣ Exchange code for tokens
+    console.log("🔄 Exchanging code for tokens...");
     const { tokens } = await oauth2Client.getToken(code);
+
     if (!tokens.refresh_token) {
+      console.warn("⚠️ No refresh_token received. Re-consent needed.");
       return res.status(400).json({
         success: false,
         message:
@@ -1460,9 +1470,12 @@ export const googleAuthCallback = async (req, res) => {
 
     oauth2Client.setCredentials(tokens);
 
+    // 2️⃣ Fetch user info
+    console.log("👤 Fetching Google user info...");
     const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
     const { data: user } = await oauth2.userinfo.get();
 
+    // 3️⃣ Save doctor
     let doctor = await Doctor.findOne({ email: user.email });
     if (!doctor) {
       doctor = new Doctor({
@@ -1475,30 +1488,27 @@ export const googleAuthCallback = async (req, res) => {
     }
     await doctor.save();
 
+    console.log("✅ Google login successful:", user.email);
+
+    // 4️⃣ Generate JWT
     const token = jwt.sign(
-      { id: doctor._id, email: doctor.email },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { id: doctor._id, email: doctor.email }, // payload
+      process.env.JWT_SECRET,                  // secret
+      { expiresIn: "7d" }                      // options
     );
 
-    // 🔹 Choose one option below
-
-    // Option 1: Redirect with token in query param
-    // const redirectUrl = `${process.env.FRONTEND_URL}/auth/callback?token=${token}`;
-    // return res.redirect(redirectUrl);
-
-    // Option 2: Redirect with cookie (recommended)
-    res.cookie("auth_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+    return res.json({
+      success: true,
+      message: "Google login successful ✅",
+      token,        // 🔑 Send JWT to frontend
+      user: {
+        id: doctor._id,
+        name: doctor.name,
+        email: doctor.email,
+      },
     });
-
-    return res.redirect(process.env.FRONTEND_URL + "/doctor/dashboard");
-
   } catch (err) {
-    console.error("❌ OAuth callback error:", err.response?.data || err.message);
+    console.error("\n\t❌ OAuth callback error:", err.response?.data || err.message);
     res.status(500).json({
       success: false,
       message: "OAuth callback failed",
@@ -1506,6 +1516,9 @@ export const googleAuthCallback = async (req, res) => {
     });
   }
 };
+
+
+
 
 
 export const connectGmail = (req, res) => {
