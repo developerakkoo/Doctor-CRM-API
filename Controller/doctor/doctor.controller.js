@@ -34,6 +34,16 @@ import { google } from "googleapis";
 import { encrypt, decrypt } from "../../utils/cryptoHelper.js";
 
 
+// import { google } from "googleapis";
+
+const oAuth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI  // e.g., http://localhost:9191/api/v1/doctors/gmail/callback
+);
+
+
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -1497,29 +1507,19 @@ export const googleAuthCallback = async (req, res) => {
       { expiresIn: "7d" }                      // options
     );
 
-    return res.json({
-      success: true,
-      message: "Google login successful ✅",
-      token,        // 🔑 Send JWT to frontend
-      user: {
-        id: doctor._id,
-        name: doctor.name,
-        email: doctor.email,
-      },
-    });
+    const redirectUrl = `http://localhost:5173/auth/google?token=${token}&id=${user._id}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}`;
+    
+    return res.redirect(redirectUrl);
+    
   } catch (err) {
     console.error("\n\t❌ OAuth callback error:", err.response?.data || err.message);
     res.status(500).json({
       success: false,
       message: "OAuth callback failed",
-      error: err.message,
+      error: "Invalid credentials",
     });
   }
 };
-
-
-
-
 
 export const connectGmail = (req, res) => {
   const scopes = [
