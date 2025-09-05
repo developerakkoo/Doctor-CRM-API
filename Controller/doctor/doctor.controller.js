@@ -1480,46 +1480,54 @@ export const googleAuthCallback = async (req, res) => {
 
     oauth2Client.setCredentials(tokens);
 
-    // 2️⃣ Fetch user info
+    // 2️⃣ Fetch user info from Google
     console.log("👤 Fetching Google user info...");
     const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
     const { data: user } = await oauth2.userinfo.get();
 
-    // 3️⃣ Save doctor
+    // 3️⃣ Check if doctor exists in DB
     let doctor = await Doctor.findOne({ email: user.email });
+
     if (!doctor) {
       doctor = new Doctor({
         name: user.name || "Doctor",
         email: user.email,
         oauthRefreshToken: encrypt(tokens.refresh_token),
       });
+      console.log("🆕 New doctor created in DB");
     } else {
       doctor.oauthRefreshToken = encrypt(tokens.refresh_token);
+      console.log("🔑 Existing doctor found in DB");
     }
+
     await doctor.save();
 
-    console.log("✅ Google login successful:", user.email);
+    console.log("✅ Google login successful:", doctor.email);
 
-    // 4️⃣ Generate JWT
+    // 4️⃣ Generate JWT with *MongoDB doctor ID*
     const token = jwt.sign(
-      { id: doctor.id, email: doctor.email }, // payload
-      process.env.JWT_SECRET,                  // secret
-      { expiresIn: "7d" }                      // options
+      { id: doctor._id, email: doctor.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
     );
 
-    const redirectUrl = `http://localhost:5173/auth/google?token=${token}&id=${user.id}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}`;
+    // 5️⃣ Redirect frontend with Mongo doctor data (not Google id!)
+    const redirectUrl = `http://localhost:5173/auth/google?token=${token}&id=${doctor._id}&name=${encodeURIComponent(
+      doctor.name
+    )}&email=${encodeURIComponent(doctor.email)}`;
 
     return res.redirect(redirectUrl);
-    
+
   } catch (err) {
     console.error("\n\t❌ OAuth callback error:", err.response?.data || err.message);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "OAuth callback failed",
       error: "Invalid credentials",
     });
   }
 };
+
 
 export const connectGmail = (req, res) => {
   const scopes = [
