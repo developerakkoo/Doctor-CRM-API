@@ -22,7 +22,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
 import sendDoctorMail from "../../utils/sendDoctorMail.js";
-import  sendAppointmentMail  from "../../utils/sendAppointmentMail.js";
+import sendAppointmentMail from "../../utils/sendAppointmentMail.js";
 
 
 import nodemailer from "nodemailer";
@@ -1446,10 +1446,6 @@ export const googleAuthCallback = async (req, res) => {
   try {
     const code = req.query.code;
 
-    console.log("=== GOOGLE AUTH CALLBACK ===");
-    console.log("Received Authorization Code:", code || "❌ None");
-    console.log("============================");
-
     if (!code) {
       return res.status(400).json({
         success: false,
@@ -1457,19 +1453,15 @@ export const googleAuthCallback = async (req, res) => {
       });
     }
 
-    // OAuth client
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
       process.env.GOOGLE_REDIRECT_URI
     );
 
-    // 1️⃣ Exchange code for tokens
-    console.log("🔄 Exchanging code for tokens...");
     const { tokens } = await oauth2Client.getToken(code);
 
     if (!tokens.refresh_token) {
-      console.warn("⚠️ No refresh_token received. Re-consent needed.");
       return res.status(400).json({
         success: false,
         message:
@@ -1480,12 +1472,9 @@ export const googleAuthCallback = async (req, res) => {
 
     oauth2Client.setCredentials(tokens);
 
-    // 2️⃣ Fetch user info from Google
-    console.log("👤 Fetching Google user info...");
     const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
     const { data: user } = await oauth2.userinfo.get();
 
-    // 3️⃣ Check if doctor exists in DB
     let doctor = await Doctor.findOne({ email: user.email });
 
     if (!doctor) {
@@ -1494,19 +1483,15 @@ export const googleAuthCallback = async (req, res) => {
         email: user.email,
         oauthRefreshToken: encrypt(tokens.refresh_token),
       });
-      console.log("🆕 New doctor created in DB");
     } else {
       doctor.oauthRefreshToken = encrypt(tokens.refresh_token);
-      console.log("🔑 Existing doctor found in DB");
     }
 
     await doctor.save();
 
-    console.log("✅ Google login successful:", doctor.email);
-
-    // 4️⃣ Generate JWT with *MongoDB doctor ID*
+    // ✅ Make JWT payload same as manual login
     const token = jwt.sign(
-      { id: doctor._id, email: doctor.email },
+      { doctorId: doctor._id, role: "doctor" }, // same structure
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
@@ -1519,7 +1504,7 @@ export const googleAuthCallback = async (req, res) => {
     return res.redirect(redirectUrl);
 
   } catch (err) {
-    console.error("\n\t❌ OAuth callback error:", err.response?.data || err.message);
+    console.error("❌ OAuth callback error:", err.message);
     return res.status(500).json({
       success: false,
       message: "OAuth callback failed",
@@ -1527,6 +1512,7 @@ export const googleAuthCallback = async (req, res) => {
     });
   }
 };
+
 
 
 export const connectGmail = (req, res) => {
