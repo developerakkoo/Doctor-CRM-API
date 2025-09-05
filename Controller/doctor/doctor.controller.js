@@ -1502,13 +1502,13 @@ export const googleAuthCallback = async (req, res) => {
 
     // 4️⃣ Generate JWT
     const token = jwt.sign(
-      { id: doctor._id, email: doctor.email }, // payload
+      { id: doctor.id, email: doctor.email }, // payload
       process.env.JWT_SECRET,                  // secret
       { expiresIn: "7d" }                      // options
     );
 
-    const redirectUrl = `http://localhost:5173/auth/google?token=${token}&id=${user._id}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}`;
-    
+    const redirectUrl = `http://localhost:5173/auth/google?token=${token}&id=${user.id}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}`;
+
     return res.redirect(redirectUrl);
     
   } catch (err) {
