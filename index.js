@@ -37,7 +37,10 @@ app.use(cors({
   },
   credentials: true,
   exposedHeaders: ['Authorization'],
-}));
+})); 
+
+app.use(express.json()); // 👈 this is required for JSON body parsing
+
 
 app.use(express.json({ limit: '2gb' }));
 app.use(express.urlencoded({ extended: true, limit: '2gb' }));

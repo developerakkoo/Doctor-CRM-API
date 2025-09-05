@@ -1,53 +1,53 @@
 // utils/sendAppointmentMail.js
 import Doctor from "../Modals/doctor/doctor.js";
-import Patient from "../Modals/patient/patient.js";
-import Appointment from "../Modals/patient/appointment.js";
 import sendDoctorMail from "../utils/sendDoctorMail.js";
 
-const sendAppointmentMail = async (doctorId) => {
+const sendAppointmentMail = async (appointment) => {
   try {
-    // ✅ Fetch latest appointment
-    const latestAppointment = await Appointment.findOne({ doctorId })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    if (!latestAppointment) {
-      return { success: false, error: "No appointment found for this doctor" };
+    // ✅ Fetch doctor
+    const doctor = await Doctor.findById(appointment.doctorId);
+    if (!doctor) {
+      return { success: false, error: "Doctor not found" };
     }
 
-    const patient = await Patient.findById(latestAppointment.patientId).lean();
-    const doctor = await Doctor.findById(doctorId).lean();
+    const subject = `Appointment Confirmation with Dr. ${doctor.name}`;
 
-    if (!doctor || !patient) {
-      return { success: false, error: "Doctor or patient not found" };
-    }
+    const html = `
+      <p>Hello ${appointment.name},</p>
+      <p>Your appointment has been confirmed. Here are the details:</p>
 
-    // ✅ Email body
-    const emailHtml = `
-      <h3>Hello ${patient.firstName},</h3>
-      <p>Your appointment has been confirmed.</p>
       <ul>
-        <li><strong>Date:</strong> ${new Date(latestAppointment.appointmentDate).toDateString()}</li>
-        <li><strong>Time:</strong> ${latestAppointment.appointmentTime}</li>
-        <li><strong>Doctor:</strong> Dr. ${doctor.name}</li>
-        <li><strong>Location:</strong> ${latestAppointment.location || "Clinic"}</li>
+        <li><b>Date:</b> ${new Date(appointment.appointmentDate).toDateString()}</li>
+        <li><b>Time:</b> ${appointment.appointmentTime}</li>
+        <li><b>Doctor:</b> Dr. ${doctor.name}</li>
+        <li><b>Patient Email:</b> ${appointment.email}</li>
+        <li><b>Phone:</b> ${appointment.phone}</li>
+        <li><b>Location:</b> ${appointment.location}</li>
+        <li><b>Duration:</b> ${appointment.duration}</li>
+        <li><b>Appointment Type:</b> ${appointment.appointmentType}</li>
+        <li><b>Status:</b> ${appointment.status}</li>
+        <li><b>Notes:</b> ${appointment.notes || "None"}</li>
       </ul>
+
       <p>Please be on time and bring any prior reports if available.</p>
-      <br>
-      <p>Thank you,<br/> Dr. ${doctor.name}</p>
+      <p>Thank you,<br/>Dr. ${doctor.name}</p>
     `;
 
-    // ✅ Send via Gmail API (doctor → patient)
-    return await sendDoctorMail(
+    const result = await sendDoctorMail(
       doctor,
-      patient.email, // 👈 patient is the recipient
-      "📅 Appointment Confirmation",
-      emailHtml
+      appointment.email.trim(),
+      subject,
+      html
     );
 
-  } catch (error) {
-    console.error("❌ Error in sendAppointmentMail:", error.message);
-    return { success: false, error: error.message };
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    return { success: true, message: "Appointment email sent successfully" };
+  } catch (err) {
+    console.error("❌ Error in sendAppointmentMail:", err.message);
+    return { success: false, error: err.message };
   }
 };
 

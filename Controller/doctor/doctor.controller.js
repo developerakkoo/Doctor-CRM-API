@@ -1299,6 +1299,7 @@ export const getPatientWeeklyStats = async (req, res) => {
 
 export const sendAppointmentEmail = async (req, res) => {
   try {
+    // Doctor ID from JWT middleware (verifyAccess)
     const doctorId = req.doctor?.doctorId || req.doctor?._id;
 
     if (!doctorId) {
@@ -1315,7 +1316,24 @@ export const sendAppointmentEmail = async (req, res) => {
       });
     }
 
-    const result = await sendAppointmentMail(doctorId);
+    // Patient + Doctor emails from request body
+    const { patientEmail, doctorEmail } = req.body;
+
+    if (!patientEmail || !doctorEmail) {
+      return res.status(400).json({
+        success: false,
+        message: "Patient email and Doctor email are required",
+      });
+    }
+
+    // 1️⃣ Create appointment in DB
+    const appointment = await Appointment.create({
+      ...req.body, // contains all fields from appointment.js schema
+      doctorId,
+    });
+
+    // 2️⃣ Send confirmation email
+    const result = await sendAppointmentMail(appointment);
 
     if (!result.success) {
       return res.status(400).json({
@@ -1326,8 +1344,8 @@ export const sendAppointmentEmail = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Appointment email sent successfully",
-      result,
+      message: "Appointment created & email sent successfully",
+      appointment,
     });
 
   } catch (error) {
