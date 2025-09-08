@@ -31,7 +31,7 @@ import {
   getFilteredAppointments,
   getRecentPatientsForDoctor,
   getPatientsStats,
-  logoutDoctor, googleAuth , googleAuthCallback , connectGmail , gmailCallback
+  logoutDoctor, googleAuth , googleAuthCallback , connectGmail , gmailCallback , getAppointmentCountPerDoctor 
 } from '../../Controller/doctor/doctor.controller.js';
 
 import upload from '../../middlewares/upload.js';
@@ -104,6 +104,11 @@ router.get('/upcoming-appointments', verifyAccess(['doctor']), getUpcomingAppoin
 router.get('/appointments/filter', verifyAccess(['doctor']), getFilteredAppointments);
 router.delete('/appointments/delete/:appointmentId', verifyAccess(['doctor']), deleteAppointment);
 router.post('/appointments/notify', verifyAccess(['doctor']), sendAppointmentEmail);
+// Get total number of appointments per doctor
+router.get('/appointments/count', verifyAccess(['doctor']), getAppointmentCountPerDoctor);
+
+
+// router.post("/appointments/call/:appointmentId", callPatientReminder);
 
 //
 // 🔹 Dashboard / stats

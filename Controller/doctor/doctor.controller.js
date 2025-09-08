@@ -986,15 +986,20 @@ export const getUpcomingAppointmentsForDoctor = async (req, res) => {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
-    // Today's midnight
-    const now = moment().startOf("day").toDate();
+    // Today midnight
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    // Fetch appointments from today onwards
+    // Tomorrow midnight
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    // Upcoming = strictly from tomorrow onwards
     const appointments = await Appointment.find({
       doctorId: doctor._id,
-      appointmentDate: { $gte: now }
+      appointmentDate: { $gte: tomorrow }
     })
-      .populate("patientId", "name age gender") // keep same as today's controller
+      .populate("patientId", "name age gender")
       .sort({ appointmentDate: 1, appointmentTime: 1 });
 
     res.status(200).json({ appointments });
@@ -1003,6 +1008,7 @@ export const getUpcomingAppointmentsForDoctor = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 export const getFilteredAppointments = async (req, res) => {
@@ -1570,5 +1576,73 @@ export const gmailCallback = async (req, res) => {
   } catch (err) {
     console.error("OAuth Error:", err);
     res.status(500).json({ success: false, error: "Failed to connect Gmail" });
+  }
+};
+
+
+
+export const callPatientReminder = async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+
+    const appointment = await Appointment.findById(appointmentId).populate("doctorId");
+    if (!appointment) {
+      return res.status(404).json({ success: false, message: "Appointment not found" });
+    }
+
+    const doctor = appointment.doctorId;
+    const patientPhone = appointment.phone;
+
+    const message = `
+Hello ${appointment.name}, this is a reminder for your appointment 
+with Doctor ${doctor.name} at ${appointment.appointmentTime} 
+on ${new Date(appointment.appointmentDate).toDateString()} 
+at ${appointment.location}. Thank you.
+`;
+
+    const result = await sendVoiceCall(patientPhone, message);
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, message: result.error });
+    }
+
+    res.json({
+      success: true,
+      message: "Voice call reminder sent successfully",
+      sid: result.sid,
+    });
+  } catch (error) {
+    console.error("❌ callPatientReminder error:", error.message);
+    res.status(500).json({ success: false, message: "Server error", error: error.message });
+  }
+};
+
+
+export const getAppointmentCountPerDoctor = async (req, res) => {
+try {
+    const doctorId = req.doctor?.doctorId || req.doctor?._id;
+
+    if (!doctorId) {
+      return res.status(401).json({ success: false, message: "Unauthorized access" });
+    }
+
+    // Today midnight
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Count appointments for today and future
+    const totalAppointments = await Appointment.countDocuments({
+      doctorId,
+      appointmentDate: { $gte: today }
+    });
+
+    res.status(200).json({
+      success: true,
+      doctorId,
+      totalAppointments
+    });
+  } catch (error) {
+    console.error("Error fetching upcoming appointment count for doctor:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
